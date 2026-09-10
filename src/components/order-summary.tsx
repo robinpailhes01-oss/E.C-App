@@ -1,0 +1,107 @@
+"use client";
+
+import type { Order } from "@/lib/types";
+import { computeTotals } from "@/lib/pricing";
+import { eur } from "@/lib/format";
+import { categoryShort } from "@/lib/catalog";
+
+const paymentLabel: Record<string, string> = { cheque: "chèque", virement: "virement", cb: "carte bancaire", especes: "espèces" };
+
+export function OrderSummary({ order, compact }: { order: Order; compact?: boolean }) {
+  const t = computeTotals(order);
+  const f = order.financing;
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-brand-gray">
+            <tr>
+              <th className="text-left font-semibold px-4 py-2.5">Désignation</th>
+              <th className="text-center font-semibold px-2 py-2.5 w-14">Qté</th>
+              {!compact && <th className="text-right font-semibold px-3 py-2.5 w-28 hidden sm:table-cell">PU HT</th>}
+              <th className="text-right font-semibold px-3 sm:px-4 py-2.5 w-28 sm:w-32">Total HT</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {order.lines.map((l) => (
+              <tr key={l.id}>
+                <td className="px-3 sm:px-4 py-2.5">
+                  <div className="font-medium leading-snug">{l.label}</div>
+                  <div className="text-xs text-brand-gray">{[l.detail, categoryShort(l.category)].filter(Boolean).join(" · ")}</div>
+                  {!compact && <div className="text-xs text-brand-gray sm:hidden">PU : {eur(l.unitPriceHT)} HT</div>}
+                </td>
+                <td className="text-center px-2 py-2.5">{l.quantity}</td>
+                {!compact && <td className="text-right px-3 py-2.5 tabular-nums hidden sm:table-cell">{eur(l.unitPriceHT)}</td>}
+                <td className="text-right px-3 sm:px-4 py-2.5 font-semibold tabular-nums whitespace-nowrap">{eur(l.quantity * l.unitPriceHT)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm space-y-1.5">
+          <div className="text-xs uppercase tracking-wide text-brand-gray font-semibold mb-2">Paiement & financement</div>
+          <div className="font-semibold">
+            {f.mode === "comptant" ? "Paiement comptant" : f.mode === "credit" ? "Financement par crédit" : "Paiement mixte (comptant + crédit)"}
+          </div>
+          {t.acompte > 0 && (
+            <div>
+              Acompte : <b>{eur(t.acompte)}</b>
+              {f.acompteMode ? ` (${paymentLabel[f.acompteMode]})` : ""}
+            </div>
+          )}
+          {t.montantFinance > 0 && (
+            <>
+              <div>
+                Montant financé : <b>{eur(t.montantFinance)}</b>
+                {f.organisme ? ` · ${f.organisme}` : ""}
+              </div>
+              {(f.dureeMois || t.mensualite) && (
+                <div>
+                  {f.dureeMois ? `${f.dureeMois} mensualités` : "Mensualités"}
+                  {t.mensualite ? ` de ${eur(t.mensualite)}` : ""}
+                  {f.taeg ? ` · TAEG ${f.taeg} %` : ""}
+                  {f.reportMois ? ` · report ${f.reportMois} mois` : ""}
+                </div>
+              )}
+            </>
+          )}
+          {t.soldeComptant > 0 && (
+            <div>
+              Solde à l&apos;installation : <b>{eur(t.soldeComptant)}</b>
+            </div>
+          )}
+          {f.aides ? <div className="text-brand-gray">Aides estimées : {eur(f.aides)} (indicatif)</div> : null}
+          {f.commentaire && <div className="text-brand-gray">{f.commentaire}</div>}
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm">
+          <div className="space-y-1.5">
+            {t.remiseHT > 0 && (
+              <>
+                <Row label="Sous-total HT" value={eur(t.brutHT)} />
+                <Row label="Remise HT" value={`- ${eur(t.remiseHT)}`} />
+              </>
+            )}
+            <Row label="Total HT" value={eur(t.totalHT)} />
+            <Row label={`TVA ${order.vatRate} %`} value={eur(t.tva)} />
+          </div>
+          <div className="mt-3 rounded-xl bg-brand-orange text-white px-4 py-3 flex items-center justify-between">
+            <span className="font-bold">Total TTC</span>
+            <span className="font-bold text-lg tabular-nums">{eur(t.totalTTC)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-brand-gray">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}

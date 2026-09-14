@@ -3,17 +3,11 @@ import type { Product, ProductCategory } from "./types";
 /**
  * GRILLE TARIFAIRE Énergies Concept.
  *
- * CONVENTION : les prix de la grille papier sont considérés comme des prix HT,
- * la TVA (20 % par défaut) est ajoutée sur le bon de commande.
- * Si la grille est en réalité exprimée TTC, passez GRID_PRICES_INCLUDE_VAT à true :
- * les montants seront alors convertis en HT (prix / 1,20) automatiquement.
+ * Les prix de la grille sont les prix conseillés TTC (le commercial raisonne en TTC,
+ * le HT et la TVA sont déduits sur le bon). Ils restent modifiables ligne par ligne.
  */
-export const GRID_PRICES_INCLUDE_VAT = false;
 export const DEFAULT_VAT_RATE = 20;
 export const VAT_RATES = [20, 10, 5.5] as const;
-
-const toHT = (gridPrice: number) =>
-  GRID_PRICES_INCLUDE_VAT ? Math.round((gridPrice / (1 + DEFAULT_VAT_RATE / 100)) * 100) / 100 : gridPrice;
 
 export const CATEGORIES: { id: ProductCategory; label: string; short: string; color: string }[] = [
   { id: "pv_sans_stockage", label: "Panneaux photovoltaïques · autoconsommation sans stockage", short: "PV sans stockage", color: "#2b84b8" },
@@ -22,6 +16,7 @@ export const CATEGORIES: { id: ProductCategory; label: string; short: string; co
   { id: "pac_air_eau", label: "Pompe à chaleur air-eau", short: "PAC air-eau", color: "#5c9a2e" },
   { id: "ecs", label: "ECS · Eau chaude sanitaire", short: "ECS", color: "#c0507a" },
   { id: "ssc", label: "SSC · Système solaire combiné", short: "SSC", color: "#9a6b12" },
+  { id: "pose", label: "Pose & composants", short: "Pose", color: "#5b6b76" },
   { id: "autre", label: "Autre / sur devis", short: "Autre", color: "#9ca3af" },
 ];
 
@@ -29,12 +24,12 @@ export const categoryLabel = (id: ProductCategory) => CATEGORIES.find((c) => c.i
 export const categoryShort = (id: ProductCategory) => CATEGORIES.find((c) => c.id === id)?.short ?? id;
 export const categoryColor = (id: ProductCategory) => CATEGORIES.find((c) => c.id === id)?.color ?? "#9ca3af";
 
-const p = (id: string, category: ProductCategory, label: string, gridPrice: number, detail?: string): Product => ({
+const p = (id: string, category: ProductCategory, label: string, priceTTC: number, detail?: string): Product => ({
   id,
   category,
   label,
   detail,
-  priceHT: toHT(gridPrice),
+  priceTTC,
 });
 
 export const PRODUCTS: Product[] = [
@@ -65,8 +60,12 @@ export const PRODUCTS: Product[] = [
   // SSC
   p("ssc-seul", "ssc", "SSC seul · Système solaire combiné", 16900),
   p("ssc-pac", "ssc", "SSC + Pompe à chaleur", 24900),
+  // Pose & composants (prix à saisir par le commercial)
+  p("pose-install", "pose", "Installation / pose et mise en service", 0, "Prix à saisir"),
+  p("pose-onduleur", "pose", "Onduleur hybride", 0, "Prix à saisir"),
+  p("pose-batterie", "pose", "Batterie(s) supplémentaire(s)", 0, "Prix à saisir"),
 ];
 
 export const productById = (id: string) => PRODUCTS.find((x) => x.id === id);
 
-export const FINANCING_ORGANISMS = ["Sofinco", "Cetelem", "Cofidis", "Franfinance", "Domofinance", "Financo", "Autre"];
+export const FINANCING_ORGANISMS = ["Domofinance", "Sofinco", "Cetelem", "Cofidis", "Franfinance", "Financo", "Autre"];

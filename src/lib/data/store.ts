@@ -1,4 +1,4 @@
-import type { Order, OrderFilter, Profile } from "../types";
+import type { AppSettings, Order, OrderFilter, Profile } from "../types";
 
 export interface DataStore {
   readonly mode: "demo" | "supabase";
@@ -13,4 +13,6 @@ export interface DataStore {
   /** Crée ou met à jour un bon. Le numéro est attribué à la création. */
   saveOrder(order: Order): Promise<Order>;
   deleteOrder(id: string): Promise<void>;
+  getSettings(): Promise<AppSettings>;
+  saveSettings(settings: AppSettings): Promise<AppSettings>;
 }

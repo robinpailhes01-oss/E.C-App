@@ -1,4 +1,6 @@
-import type { Order, OrderFilter, Profile } from "../types";
+import type { AppSettings, Order, OrderFilter, Profile } from "../types";
+import { normalizeSettings } from "../settings";
+import { normalizeOrder } from "./normalize";
 import { computeTotals } from "../pricing";
 import { getSupabase } from "../supabase/client";
 import type { DataStore } from "./store";
@@ -13,10 +15,11 @@ type OrderRow = {
   commercial_name: string;
   customer: Order["customer"];
   lines: Order["lines"];
-  remise_ht: number;
+  remise_ttc: number;
   vat_rate: number;
   financing: Order["financing"];
   notes: string | null;
+  delai_installation_mois: number | null;
   date_installation_prevue: string | null;
   lieu_signature: string | null;
   signature_client: string | null;
@@ -35,7 +38,8 @@ const toProfile = (r: ProfileRow): Profile => ({
   active: r.active,
 });
 
-const toOrder = (r: OrderRow): Order => ({
+const toOrder = (r: OrderRow): Order =>
+  normalizeOrder({
   id: r.id,
   numero: r.numero,
   status: r.status,
@@ -43,10 +47,11 @@ const toOrder = (r: OrderRow): Order => ({
   commercialName: r.commercial_name,
   customer: r.customer,
   lines: r.lines,
-  remiseHT: Number(r.remise_ht),
+  remiseTTC: Number(r.remise_ttc),
   vatRate: Number(r.vat_rate),
   financing: r.financing,
   notes: r.notes ?? undefined,
+  delaiInstallationMois: r.delai_installation_mois ?? undefined,
   dateInstallationPrevue: r.date_installation_prevue ?? undefined,
   lieuSignature: r.lieu_signature ?? undefined,
   signatureClient: r.signature_client ?? undefined,
@@ -54,7 +59,7 @@ const toOrder = (r: OrderRow): Order => ({
   signedAt: r.signed_at ?? undefined,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
-});
+  });
 
 const toRow = (o: Order) => {
   const t = computeTotals(o);
@@ -65,11 +70,12 @@ const toRow = (o: Order) => {
     commercial_name: o.commercialName,
     customer: o.customer,
     lines: o.lines,
-    remise_ht: o.remiseHT,
+    remise_ttc: o.remiseTTC,
     vat_rate: o.vatRate,
     financing: o.financing,
     notes: o.notes ?? null,
-    date_installation_prevue: o.dateInstallationPrevue ?? null,
+    delai_installation_mois: o.delaiInstallationMois ?? null,
+    date_installation_prevue: o.dateInstallationPrevue || null,
     lieu_signature: o.lieuSignature ?? null,
     signature_client: o.signatureClient ?? null,
     signature_commercial: o.signatureCommercial ?? null,
@@ -144,5 +150,19 @@ export class SupabaseStore implements DataStore {
   async deleteOrder(id: string) {
     const { error } = await getSupabase().from("orders").delete().eq("id", id);
     if (error) throw error;
+  }
+
+  async getSettings() {
+    const { data, error } = await getSupabase().from("settings").select("value").eq("id", "default").maybeSingle();
+    if (error) throw error;
+    return normalizeSettings((data?.value as Partial<AppSettings>) ?? null);
+  }
+
+  async saveSettings(settings: AppSettings) {
+    const session = await this.getSession();
+    const value = normalizeSettings({ ...settings, updatedAt: new Date().toISOString(), updatedBy: session?.fullName });
+    const { error } = await getSupabase().from("settings").upsert({ id: "default", value }, { onConflict: "id" });
+    if (error) throw error;
+    return value;
   }
 }

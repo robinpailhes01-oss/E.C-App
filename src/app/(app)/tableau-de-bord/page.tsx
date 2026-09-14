@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
     // CA par famille de produit (HT, ventilé par ligne)
     const byCat: Record<string, number> = {};
-    signed.forEach((o) => o.lines.forEach((l) => (byCat[l.category] = (byCat[l.category] || 0) + l.quantity * l.unitPriceHT)));
+    signed.forEach((o) => o.lines.forEach((l) => (byCat[l.category] = (byCat[l.category] || 0) + l.quantity * l.unitPriceTTC)));
     const byCategory = CATEGORIES.filter((c) => byCat[c.id]).map((c) => ({ id: c.id, label: c.short, value: Math.round(byCat[c.id]) }));
 
     // Par commercial
@@ -190,7 +190,7 @@ export default function DashboardPage() {
 
         <Card className="p-4 lg:col-span-2">
           <h2 className="font-display font-semibold text-[17px]">Ventes par famille de produit</h2>
-          <p className="text-xs text-muted mb-4">Montant HT des lignes signées</p>
+          <p className="text-xs text-muted mb-4">Montant TTC des lignes signées</p>
           {data.byCategory.length === 0 ? (
             <EmptyState title="Aucune donnée" />
           ) : (
@@ -206,7 +206,7 @@ export default function DashboardPage() {
                         active && payload?.length ? (
                           <div className="rounded-[12px] bg-night text-white shadow-[var(--shadow-float)] px-3 py-2 text-sm">
                             <div className="font-semibold">{(payload[0].payload as { label: string }).label}</div>
-                            <div className="num">{eur0(payload[0].value as number)} HT</div>
+                            <div className="num">{eur0(payload[0].value as number)} TTC</div>
                           </div>
                         ) : null
                       }

@@ -16,6 +16,7 @@ export type ProductCategory =
   | "pac_air_eau"
   | "ecs"
   | "ssc"
+  | "pose"
   | "autre";
 
 export interface Product {
@@ -23,8 +24,8 @@ export interface Product {
   category: ProductCategory;
   label: string;
   detail?: string;
-  /** Prix catalogue exprimé en HT (voir catalog.ts pour la convention). */
-  priceHT: number;
+  /** Prix conseillé TTC. 0 = prix à saisir par le commercial. */
+  priceTTC: number;
 }
 
 export type Civilite = "M." | "Mme" | "M. et Mme";
@@ -54,24 +55,41 @@ export interface OrderLine {
   label: string;
   detail?: string;
   quantity: number;
-  unitPriceHT: number;
+  /** Prix unitaire TTC saisi par le commercial (le HT et la TVA en sont déduits). */
+  unitPriceTTC: number;
 }
 
-export type FinancingMode = "comptant" | "credit" | "mixte";
+export type FinancingMode = "comptant" | "credit";
 export type PaymentMethod = "cheque" | "virement" | "cb" | "especes";
+
+/** Échéancier des règlements comptant (montants TTC). */
+export interface PaymentSchedule {
+  commande: number;
+  visiteTechnique: number;
+  livraison: number;
+  installation: number;
+}
 
 export interface Financing {
   mode: FinancingMode;
-  /** Acompte versé à la commande (TTC). */
-  acompte: number;
+  echeancier: PaymentSchedule;
+  /** Mode de règlement de l'acompte à la commande. */
   acompteMode?: PaymentMethod;
+  /** Chèque d'acompte récupéré par le commercial. */
+  chequeRecupere?: boolean;
+  // --- Crédit ---
   organisme?: string;
-  /** Montant financé par le crédit (TTC). */
-  montantFinance?: number;
+  /** Taux débiteur annuel figé au moment de la création du bon (%). */
+  taux?: number;
+  /** Taux d'assurance annuel figé (% du capital emprunté). */
+  tauxAssurance?: number;
+  avecAssurance?: boolean;
   dureeMois?: number;
-  taeg?: number;
-  mensualite?: number;
   reportMois?: number;
+  nbEmprunteurs?: number;
+  dateNaissance1?: string;
+  dateNaissance2?: string;
+  enActivite?: boolean;
   /** Aides / primes estimées (information client, non déduites du bon). */
   aides?: number;
   commentaire?: string;
@@ -87,11 +105,13 @@ export interface Order {
   commercialName: string;
   customer: Customer;
   lines: OrderLine[];
-  /** Remise commerciale globale en € HT. */
-  remiseHT: number;
+  /** Remise commerciale globale en € TTC. */
+  remiseTTC: number;
   vatRate: number;
   financing: Financing;
   notes?: string;
+  /** Délai d'installation annoncé au client, en mois. */
+  delaiInstallationMois?: number;
   dateInstallationPrevue?: string;
   lieuSignature?: string;
   signatureClient?: string;
@@ -106,4 +126,18 @@ export interface OrderFilter {
   status?: OrderStatus;
   from?: string;
   to?: string;
+}
+
+/** Paramètres gérés par la direction (espace Paramètres). */
+export interface AppSettings {
+  /** Taux débiteur annuel appliqué aux nouveaux bons (%). */
+  tauxNominal: number;
+  /** Taux d'assurance emprunteur annuel (% du capital emprunté). */
+  tauxAssurance: number;
+  /** Durées proposées au client, en mois. */
+  dureesProposees: number[];
+  organismeDefaut: string;
+  tvaDefaut: number;
+  updatedAt?: string;
+  updatedBy?: string;
 }

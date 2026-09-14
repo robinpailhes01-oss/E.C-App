@@ -42,8 +42,15 @@ export function StepReview({
             <div className="font-semibold">{order.commercialName}</div>
             <div className="text-muted">{COMPANY.name}</div>
             <div className="mt-2">
-              Installation prévue :{" "}
-              <b>{order.dateInstallationPrevue ? new Date(order.dateInstallationPrevue + "T00:00:00").toLocaleDateString("fr-FR") : "à définir"}</b>
+              Installation :{" "}
+              <b>
+                {[
+                  order.delaiInstallationMois ? `sous ${order.delaiInstallationMois} mois` : null,
+                  order.dateInstallationPrevue ? `prévue le ${new Date(order.dateInstallationPrevue + "T00:00:00").toLocaleDateString("fr-FR")}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "à définir"}
+              </b>
             </div>
           </div>
         </div>

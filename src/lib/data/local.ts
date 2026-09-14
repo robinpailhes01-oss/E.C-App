@@ -1,9 +1,12 @@
-import type { Order, OrderFilter, Profile } from "../types";
+import type { AppSettings, Order, OrderFilter, Profile } from "../types";
+import { normalizeSettings } from "../settings";
+import { normalizeOrder } from "./normalize";
 import type { DataStore } from "./store";
 
 const KEY_ORDERS = "ec.orders.v1";
 const KEY_SESSION = "ec.session.v1";
 const KEY_SEQ = "ec.seq.v1";
+const KEY_SETTINGS = "ec.settings.v1";
 
 const DEMO_ACCOUNTS: Profile[] = [
   { id: "u-dir", email: "direction@energiesconcept.fr", fullName: "Direction Énergies Concept", role: "directeur", active: true },
@@ -67,13 +70,14 @@ export class LocalStore implements DataStore {
 
   async listOrders(filter?: OrderFilter) {
     const session = await this.getSession();
-    const all = read<Order[]>(KEY_ORDERS, []);
+    const all = read<Order[]>(KEY_ORDERS, []).map(normalizeOrder);
     const scoped = session?.role === "commercial" ? all.filter((o) => o.commercialId === session.id) : all;
     return applyFilter(scoped, filter).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getOrder(id: string) {
-    return read<Order[]>(KEY_ORDERS, []).find((o) => o.id === id) ?? null;
+    const found = read<Order[]>(KEY_ORDERS, []).find((o) => o.id === id);
+    return found ? normalizeOrder(found) : null;
   }
 
   async saveOrder(order: Order) {
@@ -100,5 +104,16 @@ export class LocalStore implements DataStore {
       KEY_ORDERS,
       read<Order[]>(KEY_ORDERS, []).filter((o) => o.id !== id),
     );
+  }
+
+  async getSettings() {
+    return normalizeSettings(read<Partial<AppSettings> | null>(KEY_SETTINGS, null));
+  }
+
+  async saveSettings(settings: AppSettings) {
+    const session = await this.getSession();
+    const saved = normalizeSettings({ ...settings, updatedAt: new Date().toISOString(), updatedBy: session?.fullName });
+    write(KEY_SETTINGS, saved);
+    return saved;
   }
 }

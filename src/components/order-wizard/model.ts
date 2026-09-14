@@ -1,4 +1,4 @@
-import type { Customer, Order, Profile } from "@/lib/types";
+import type { AppSettings, Customer, Order, Profile } from "@/lib/types";
 import { DEFAULT_VAT_RATE } from "@/lib/catalog";
 import { uid } from "@/lib/format";
 
@@ -20,7 +20,7 @@ export const emptyCustomer = (): Customer => ({
   factureAnnuelle: "",
 });
 
-export const emptyOrder = (user: Profile): Order => ({
+export const emptyOrder = (user: Profile, settings: AppSettings): Order => ({
   id: uid(),
   numero: "",
   status: "brouillon",
@@ -28,10 +28,22 @@ export const emptyOrder = (user: Profile): Order => ({
   commercialName: user.fullName,
   customer: emptyCustomer(),
   lines: [],
-  remiseHT: 0,
-  vatRate: DEFAULT_VAT_RATE,
-  financing: { mode: "comptant", acompte: 0, acompteMode: "cheque" },
+  remiseTTC: 0,
+  vatRate: settings.tvaDefaut || DEFAULT_VAT_RATE,
+  financing: {
+    mode: "comptant",
+    echeancier: { commande: 0, visiteTechnique: 0, livraison: 0, installation: 0 },
+    acompteMode: "cheque",
+    chequeRecupere: false,
+    organisme: settings.organismeDefaut,
+    taux: settings.tauxNominal,
+    tauxAssurance: settings.tauxAssurance,
+    avecAssurance: false,
+    nbEmprunteurs: 1,
+    enActivite: true,
+  },
   notes: "",
+  delaiInstallationMois: 3,
   dateInstallationPrevue: "",
   lieuSignature: "",
   createdAt: "",

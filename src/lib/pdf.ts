@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Order } from "./types";
-import { computeTotals } from "./pricing";
+import { computeTotals, ttcToHT } from "./pricing";
 import { COMPANY } from "./company";
 import { categoryShort } from "./catalog";
 
@@ -16,10 +16,14 @@ const eurPdf = (n: number | null | undefined) =>
 
 const dateFr = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "");
 
-const dateInstallation = (iso?: string) => {
-  if (!iso) return "À définir avec le client";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
+const dateInstallation = (order: Order) => {
+  const parts: string[] = [];
+  if (order.delaiInstallationMois) parts.push(`sous ${order.delaiInstallationMois} mois`);
+  if (order.dateInstallationPrevue) {
+    const [y, m, d] = order.dateInstallationPrevue.split("-");
+    parts.push(`prévue le ${d}/${m}/${y}`);
+  }
+  return parts.length ? parts.join(" · ") : "À définir avec le client";
 };
 
 async function loadLogo(): Promise<string | null> {
@@ -37,16 +41,7 @@ async function loadLogo(): Promise<string | null> {
   }
 }
 
-const financingLabel = (o: Order) => {
-  switch (o.financing.mode) {
-    case "comptant":
-      return "Paiement comptant";
-    case "credit":
-      return "Financement par crédit";
-    case "mixte":
-      return "Paiement mixte (comptant + crédit)";
-  }
-};
+const financingLabel = (o: Order) => (o.financing.mode === "comptant" ? "Paiement comptant" : `Financement par crédit${o.financing.organisme ? ` · ${o.financing.organisme}` : ""}`);
 
 const paymentLabel: Record<string, string> = { cheque: "Chèque", virement: "Virement", cb: "Carte bancaire", especes: "Espèces" };
 
@@ -127,7 +122,7 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
     c.surfaceM2 && `Surface : ${c.surfaceM2} m²`,
     c.chauffageActuel && `Chauffage actuel : ${c.chauffageActuel}`,
     c.factureAnnuelle && `Facture énergie annuelle : ${c.factureAnnuelle} €`,
-    `Installation prévue : ${dateInstallation(order.dateInstallationPrevue)}`,
+    `Installation : ${dateInstallation(order)}`,
   ].filter(Boolean) as string[];
   info.forEach((l, i) => doc.text(l, M + half + 8, y + 11.5 + i * 4.2));
 
@@ -137,16 +132,17 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
   autoTable(doc, {
     startY: y,
     margin: { left: M, right: M },
-    head: [["Désignation", "Qté", "PU HT", "Total HT"]],
+    head: [["Désignation", "Qté", "PU HT", "PU TTC", "Total TTC"]],
     body: order.lines.map((l) => [
       { content: `${l.label}${l.detail ? `\n${l.detail}` : ""}\n${categoryShort(l.category)}`, styles: {} },
       String(l.quantity),
-      eurPdf(l.unitPriceHT),
-      eurPdf(l.quantity * l.unitPriceHT),
+      eurPdf(ttcToHT(l.unitPriceTTC, order.vatRate)),
+      eurPdf(l.unitPriceTTC),
+      eurPdf(l.quantity * l.unitPriceTTC),
     ]),
     styles: { font: "helvetica", fontSize: 9, cellPadding: 2, textColor: INK, lineColor: [230, 230, 230], lineWidth: 0.2 },
     headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold" },
-    columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 14, halign: "center" }, 2: { cellWidth: 30, halign: "right" }, 3: { cellWidth: 32, halign: "right" } },
+    columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 12, halign: "center" }, 2: { cellWidth: 26, halign: "right" }, 3: { cellWidth: 26, halign: "right" }, 4: { cellWidth: 30, halign: "right" } },
     alternateRowStyles: { fillColor: [250, 250, 248] },
     didParseCell: (data) => {
       if (data.section === "body" && data.column.index === 0) {
@@ -158,9 +154,9 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
 
   // ---------------------------------------------------------------- Totals
   const totalsRows: [string, string, boolean?][] = [];
-  if (t.remiseHT > 0) {
-    totalsRows.push(["Sous-total HT", eurPdf(t.brutHT)]);
-    totalsRows.push(["Remise commerciale HT", `- ${eurPdf(t.remiseHT)}`]);
+  if (t.remiseTTC > 0) {
+    totalsRows.push(["Sous-total TTC", eurPdf(t.brutTTC)]);
+    totalsRows.push(["Remise commerciale TTC", `- ${eurPdf(t.remiseTTC)}`]);
   }
   totalsRows.push(["Total HT", eurPdf(t.totalHT)]);
   totalsRows.push([`TVA ${order.vatRate.toString().replace(".", ",")} %`, eurPdf(t.tva)]);
@@ -191,21 +187,39 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
 
   // ------------------------------------------------------------ Financement
   const f = order.financing;
+  const e = f.echeancier;
   const finLines: string[] = [financingLabel(order)];
-  if (t.acompte > 0) finLines.push(`Acompte à la commande : ${eurPdf(t.acompte)}${f.acompteMode ? ` (${paymentLabel[f.acompteMode]})` : ""}`);
-  if (t.montantFinance > 0) {
-    finLines.push(`Montant financé : ${eurPdf(t.montantFinance)}${f.organisme ? ` · Organisme : ${f.organisme}` : ""}`);
-    const parts = [
-      f.dureeMois ? `${f.dureeMois} mensualités` : null,
-      t.mensualite ? `de ${eurPdf(t.mensualite)}` : null,
-      f.taeg ? `· TAEG ${f.taeg.toString().replace(".", ",")} %` : null,
-      f.reportMois ? `· report ${f.reportMois} mois` : null,
+  const sched = [
+    ["À la commande", e.commande],
+    ["À la visite technique", e.visiteTechnique],
+    ["À la livraison", e.livraison],
+    ["À l'installation", e.installation],
+  ] as [string, number][];
+  const schedTxt = sched.map(([l, v]) => `${l} : ${eurPdf(v || 0)}`).join("   ·   ");
+  finLines.push((f.mode === "comptant" ? "Échéancier · " : "Apport · ") + schedTxt);
+  if ((e.commande || 0) > 0 && f.acompteMode) finLines.push(`Acompte à la commande réglé par ${paymentLabel[f.acompteMode].toLowerCase()}${f.chequeRecupere ? " (chèque remis au commercial)" : ""}`);
+  if (f.mode === "comptant" && t.resteARepartir > 0) finLines.push(`Solde restant à régler : ${eurPdf(t.resteARepartir)}`);
+  if (f.mode === "credit") {
+    finLines.push(`Montant financé : ${eurPdf(t.montantFinance)}${f.taux ? ` · taux débiteur annuel fixe ${f.taux.toString().replace(".", ",")} %` : ""}`);
+    if (t.mensualite && f.dureeMois) {
+      finLines.push(
+        `${f.dureeMois} mensualités de ${eurPdf(t.mensualite)} ${f.avecAssurance ? "assurance incluse" : "hors assurance"}` +
+          (t.assuranceMensuelle ? ` (dont assurance ${eurPdf(t.assuranceMensuelle)} / mois)` : "") +
+          (f.reportMois ? ` · report de ${f.reportMois} mois` : ""),
+      );
+      if (t.coutTotalCredit) finLines.push(`Montant total dû : ${eurPdf(t.coutTotalCredit)}`);
+    } else {
+      finLines.push("Durée du crédit à définir.");
+    }
+    const emp = [
+      f.nbEmprunteurs ? `${f.nbEmprunteurs} emprunteur${f.nbEmprunteurs > 1 ? "s" : ""}` : null,
+      f.dateNaissance1 ? `né(e) le ${dateFr(f.dateNaissance1)}` : null,
+      f.dateNaissance2 ? `et le ${dateFr(f.dateNaissance2)}` : null,
+      f.enActivite === false ? "sans activité" : null,
     ].filter(Boolean);
-    if (parts.length) finLines.push(parts.join(" "));
-    if (t.coutTotalCredit) finLines.push(`Coût total du crédit (hors assurance) : ${eurPdf(t.coutTotalCredit)}`);
-    finLines.push("Sous réserve d'acceptation du dossier par l'organisme de financement.");
+    if (emp.length) finLines.push(emp.join(" · "));
+    finLines.push("Vente conclue sous réserve d'acceptation du dossier de financement par l'organisme prêteur (art. L312-45 du Code de la consommation).");
   }
-  if (t.soldeComptant > 0) finLines.push(`Solde à régler à l'installation : ${eurPdf(t.soldeComptant)}`);
   if (f.aides && f.aides > 0) finLines.push(`Aides / primes estimées (à titre indicatif, non contractuel) : ${eurPdf(f.aides)}`);
   if (f.commentaire) finLines.push(f.commentaire);
 

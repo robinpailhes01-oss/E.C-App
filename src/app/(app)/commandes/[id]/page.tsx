@@ -144,8 +144,15 @@ function OrderDetailInner() {
         <Card className="p-4 text-sm">
           <div className="text-[10px] uppercase tracking-[0.14em] text-muted font-bold mb-1.5">Installation & signature</div>
           <div>
-            Installation prévue :{" "}
-            <b>{order.dateInstallationPrevue ? new Date(order.dateInstallationPrevue + "T00:00:00").toLocaleDateString("fr-FR") : "à définir"}</b>
+            Installation :{" "}
+            <b>
+              {[
+                order.delaiInstallationMois ? `sous ${order.delaiInstallationMois} mois` : null,
+                order.dateInstallationPrevue ? `prévue le ${new Date(order.dateInstallationPrevue + "T00:00:00").toLocaleDateString("fr-FR")}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "à définir"}
+            </b>
           </div>
           {order.signedAt ? (
             <div className="mt-2 grid grid-cols-2 gap-2">

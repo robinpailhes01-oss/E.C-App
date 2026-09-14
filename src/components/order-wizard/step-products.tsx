@@ -9,19 +9,25 @@ import { Button, Field, Input, Modal, SectionTitle, Select } from "@/components/
 
 export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[]; vatRate: number; onChange: (l: OrderLine[]) => void }) {
   const [cat, setCat] = React.useState<ProductCategory>("pv_sans_stockage");
-  const [custom, setCustom] = React.useState(false);
+  const [custom, setCustom] = React.useState<false | { open: true; preset?: Product }>(false);
+  const [customKey, setCustomKey] = React.useState(0);
 
   const qtyOf = (productId: string) => lines.find((l) => l.productId === productId)?.quantity ?? 0;
 
   const add = (p: Product) => {
     const existing = lines.find((l) => l.productId === p.id);
-    if (existing) onChange(lines.map((l) => (l.id === existing.id ? { ...l, quantity: l.quantity + 1 } : l)));
-    else onChange([...lines, { id: uid(), productId: p.id, category: p.category, label: p.label, detail: p.detail, quantity: 1, unitPriceHT: p.priceHT }]);
+    if (existing) return onChange(lines.map((l) => (l.id === existing.id ? { ...l, quantity: l.quantity + 1 } : l)));
+    // Produit sans prix conseillé : le commercial saisit le prix TTC.
+    if (!p.priceTTC) {
+      setCustomKey((k) => k + 1);
+      return setCustom({ open: true, preset: p });
+    }
+    onChange([...lines, { id: uid(), productId: p.id, category: p.category, label: p.label, detail: p.detail, quantity: 1, unitPriceTTC: p.priceTTC }]);
   };
   const setQty = (id: string, q: number) => onChange(q <= 0 ? lines.filter((l) => l.id !== id) : lines.map((l) => (l.id === id ? { ...l, quantity: q } : l)));
 
   const visible = PRODUCTS.filter((p) => p.category === cat);
-  const ttc = (ht: number) => ht * (1 + vatRate / 100);
+  const ht = (ttc: number) => ttc / (1 + vatRate / 100);
 
   return (
     <div className="space-y-8">
@@ -53,8 +59,14 @@ export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[];
                   <div className="font-semibold leading-snug text-[15px]">{p.label}</div>
                   {p.detail && <div className="text-xs text-muted mt-0.5">{p.detail}</div>}
                   <div className="mt-1.5 flex items-baseline gap-x-2 flex-wrap">
-                    <span className="num font-semibold text-brand-blue-dark whitespace-nowrap">{eur0(p.priceHT)} HT</span>
-                    <span className="text-xs text-muted whitespace-nowrap">{eur0(ttc(p.priceHT))} TTC</span>
+                    {p.priceTTC ? (
+                      <>
+                        <span className="num font-semibold text-brand-blue-dark whitespace-nowrap">{eur0(p.priceTTC)} TTC</span>
+                        <span className="text-xs text-muted whitespace-nowrap">soit {eur0(ht(p.priceTTC))} HT</span>
+                      </>
+                    ) : (
+                      <span className="text-xs font-semibold text-brand-orange-dark">Prix TTC à saisir</span>
+                    )}
                   </div>
                 </div>
                 {q ? (
@@ -77,7 +89,11 @@ export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[];
           })}
         </div>
 
-        <Button type="button" variant="secondary" className="mt-4" onClick={() => setCustom(true)}>
+        <Button type="button" variant="secondary" className="mt-4" onClick={() => {
+            setCustomKey((k) => k + 1);
+            setCustom({ open: true });
+          }}
+        >
           <Plus className="size-4" /> Ligne personnalisée (option, sur devis…)
         </Button>
       </section>
@@ -95,7 +111,7 @@ export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[];
                   <div className="min-w-0">
                     <div className="font-semibold text-sm leading-snug">{l.label}</div>
                     <div className="text-xs text-muted">
-                      {categoryShort(l.category)} · {eur0(l.unitPriceHT)} HT / unité
+                      {categoryShort(l.category)} · {eur0(l.unitPriceTTC)} TTC / unité
                     </div>
                   </div>
                 </div>
@@ -108,7 +124,7 @@ export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[];
                     <Plus className="size-4" />
                   </button>
                 </div>
-                <div className="w-24 text-right num font-semibold text-sm">{eur0(l.quantity * l.unitPriceHT)}</div>
+                <div className="w-24 text-right num font-semibold text-sm">{eur0(l.quantity * l.unitPriceTTC)}</div>
                 <button type="button" onClick={() => setQty(l.id, 0)} className="size-9 grid place-items-center rounded-[9px] text-red-500 hover:bg-red-50 transition" aria-label="Supprimer">
                   <Trash2 className="size-4" />
                 </button>
@@ -118,21 +134,21 @@ export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[];
         )}
       </section>
 
-      <CustomLineModal open={custom} onClose={() => setCustom(false)} onAdd={(l) => onChange([...lines, l])} />
+      <CustomLineModal key={customKey} open={Boolean(custom)} preset={custom ? custom.preset : undefined} onClose={() => setCustom(false)} onAdd={(l) => onChange([...lines, l])} />
     </div>
   );
 }
 
-function CustomLineModal({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (l: OrderLine) => void }) {
-  const [label, setLabel] = React.useState("");
+function CustomLineModal({ open, preset, onClose, onAdd }: { open: boolean; preset?: Product; onClose: () => void; onAdd: (l: OrderLine) => void }) {
+  const [label, setLabel] = React.useState(preset?.label ?? "");
   const [detail, setDetail] = React.useState("");
   const [price, setPrice] = React.useState("");
-  const [category, setCategory] = React.useState<ProductCategory>("autre");
+  const [category, setCategory] = React.useState<ProductCategory>(preset?.category ?? "autre");
 
   const submit = () => {
     const p = parseFloat(price.replace(",", "."));
     if (!label.trim() || isNaN(p)) return;
-    onAdd({ id: uid(), category, label: label.trim(), detail: detail.trim() || undefined, quantity: 1, unitPriceHT: p });
+    onAdd({ id: uid(), productId: preset?.id, category, label: label.trim(), detail: detail.trim() || undefined, quantity: 1, unitPriceTTC: p });
     setLabel("");
     setDetail("");
     setPrice("");
@@ -140,7 +156,7 @@ function CustomLineModal({ open, onClose, onAdd }: { open: boolean; onClose: () 
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Ligne personnalisée">
+    <Modal open={open} onClose={onClose} title={preset ? preset.label : "Ligne personnalisée"}>
       <div className="space-y-4">
         <Field label="Désignation" required>
           <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="ex. Reprise de toiture, carport solaire…" />
@@ -149,7 +165,7 @@ function CustomLineModal({ open, onClose, onAdd }: { open: boolean; onClose: () 
           <Input value={detail} onChange={(e) => setDetail(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Prix unitaire HT (€)" required>
+          <Field label="Prix unitaire TTC (€)" required>
             <Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="0,00" />
           </Field>
           <Field label="Famille">

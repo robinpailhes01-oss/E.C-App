@@ -4,10 +4,10 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, FileDown, Save } from "lucide-react";
-import type { Order } from "@/lib/types";
+import type { AppSettings, Order } from "@/lib/types";
 import { getStore } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
-import { Button, Card, cx } from "@/components/ui";
+import { Button, Card, Spinner, cx } from "@/components/ui";
 import { openOrderPdf } from "@/lib/pdf";
 import { computeTotals } from "@/lib/pricing";
 import { eur, eur0 } from "@/lib/format";
@@ -18,9 +18,18 @@ import { StepPricing } from "./step-pricing";
 import { StepReview } from "./step-review";
 
 export function OrderWizard({ initial }: { initial?: Order }) {
+  const [settings, setSettings] = React.useState<AppSettings | null>(null);
+  React.useEffect(() => {
+    getStore().getSettings().then(setSettings);
+  }, []);
+  if (!settings) return <Spinner label="Chargement des paramètres…" />;
+  return <OrderWizardInner initial={initial} settings={settings} />;
+}
+
+function OrderWizardInner({ initial, settings }: { initial?: Order; settings: AppSettings }) {
   const { user } = useAuth();
   const router = useRouter();
-  const [order, setOrder] = React.useState<Order>(() => initial ?? emptyOrder(user));
+  const [order, setOrder] = React.useState<Order>(() => initial ?? emptyOrder(user, settings));
   const [step, setStep] = React.useState(0);
   const [dir, setDir] = React.useState(1);
   const [errors, setErrors] = React.useState<CustomerErrors>({});
@@ -201,7 +210,7 @@ export function OrderWizard({ initial }: { initial?: Order }) {
               />
             )}
             {step === 1 && <StepProducts lines={order.lines} vatRate={order.vatRate} onChange={(lines) => update({ lines })} />}
-            {step === 2 && <StepPricing order={order} onChange={update} />}
+            {step === 2 && <StepPricing order={order} onChange={update} settings={settings} />}
             {step === 3 && <StepReview order={order} onChange={update} accepted={accepted} onAccepted={setAccepted} />}
           </motion.div>
         </AnimatePresence>

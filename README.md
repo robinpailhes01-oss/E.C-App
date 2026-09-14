@@ -28,8 +28,9 @@ trois comptes fictifs sont proposés et les données sont stockées dans le navi
 ## Brancher Supabase (usage en équipe)
 
 1. Créer un projet sur https://supabase.com.
-2. Dans l'éditeur SQL du projet, exécuter `supabase/migrations/0001_init.sql`
-   (tables `profiles` et `orders`, numérotation automatique `BC-AAAA-0001`, sécurité par rôle).
+2. Dans l'éditeur SQL du projet, exécuter dans l'ordre `supabase/migrations/0001_init.sql` puis
+   `supabase/migrations/0002_ttc_echeancier_settings.sql` (tables `profiles`, `orders`, `settings`,
+   numérotation automatique `BC-AAAA-0001`, sécurité par rôle).
 3. Copier `.env.example` en `.env.local` et renseigner :
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
@@ -46,7 +47,8 @@ trois comptes fictifs sont proposés et les données sont stockées dans le navi
 ## À personnaliser
 
 - `src/lib/company.ts` : coordonnées, SIRET, RCS, TVA intracommunautaire, assurance décennale (imprimés sur le PDF).
-- `src/lib/catalog.ts` : produits et prix. **Convention actuelle : les prix de la grille sont HT, la TVA 20 % est ajoutée.** Si la grille est en réalité TTC, passer `GRID_PRICES_INCLUDE_VAT` à `true`.
+- `src/lib/catalog.ts` : produits et prix conseillés TTC.
+- `src/lib/settings.ts` : valeurs par défaut des paramètres (taux, assurance, durées) utilisées tant que la direction ne les a pas modifiés.
 - `src/lib/pdf.ts` : mise en page du bon et texte des CGV.
 
 ## Stack

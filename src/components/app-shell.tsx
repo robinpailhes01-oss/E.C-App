@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { FileText, LayoutDashboard, LogOut, PlusCircle } from "lucide-react";
+import { FileText, LayoutDashboard, LogOut, PlusCircle, Settings2 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { getStore } from "@/lib/data";
 import { Initials, cx } from "./ui";
@@ -18,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ...(isDirector ? [{ href: "/tableau-de-bord", label: "Tableau de bord", short: "Tableau", icon: LayoutDashboard }] : []),
     { href: "/commandes", label: "Bons de commande", short: "Bons", icon: FileText },
     { href: "/commandes/nouveau", label: "Nouveau bon", short: "Nouveau", icon: PlusCircle },
+    ...(isDirector ? [{ href: "/parametres", label: "Paramètres", short: "Réglages", icon: Settings2 }] : []),
   ];
   // Les pages de saisie ont leur propre barre d'action : on masque la navigation basse.
   const wizardPage = pathname === "/commandes/nouveau" || pathname.endsWith("/modifier");

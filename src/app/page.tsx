@@ -12,6 +12,6 @@ export default function Home() {
       .then((p) => router.replace(p ? (p.role === "directeur" ? "/tableau-de-bord" : "/commandes") : "/login"));
   }, [router]);
   return (
-    <div className="flex-1 grid place-items-center text-brand-gray text-sm">Chargement…</div>
+    <div className="flex-1 grid place-items-center text-muted text-sm">Chargement…</div>
   );
 }

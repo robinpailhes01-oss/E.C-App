@@ -1,16 +1,16 @@
 "use client";
 
 import type { Customer } from "@/lib/types";
-import { Field, Input, SegmentedControl, Select, Toggle } from "@/components/ui";
+import { Field, Input, SectionTitle, SegmentedControl, Select, Toggle } from "@/components/ui";
 import type { CustomerErrors } from "./model";
 
 export function StepClient({ customer, errors, onChange }: { customer: Customer; errors: CustomerErrors; onChange: (c: Customer) => void }) {
   const set = <K extends keyof Customer>(k: K, v: Customer[K]) => onChange({ ...customer, [k]: v });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
-        <h2 className="font-bold text-lg mb-3">Coordonnées du client</h2>
+        <SectionTitle sub="Identité et adresse du lieu d'installation.">Coordonnées du client</SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
           <Field label="Civilité" className="sm:col-span-2">
             <Select value={customer.civilite} onChange={(e) => set("civilite", e.target.value as Customer["civilite"])}>
@@ -47,7 +47,7 @@ export function StepClient({ customer, errors, onChange }: { customer: Customer;
       </section>
 
       <section>
-        <h2 className="font-bold text-lg mb-3">Logement</h2>
+        <SectionTitle sub="Informations utiles à la visite technique (facultatif).">Logement</SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
           <Field label="Type de logement" className="sm:col-span-3">
             <SegmentedControl

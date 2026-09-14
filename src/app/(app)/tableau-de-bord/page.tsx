@@ -10,7 +10,7 @@ import type { Order, Profile, ProductCategory } from "@/lib/types";
 import { computeTotals } from "@/lib/pricing";
 import { CATEGORIES, categoryColor, categoryShort } from "@/lib/catalog";
 import { STATUS_LABEL, customerName, dateFr, eur0, monthKey, monthLabel } from "@/lib/format";
-import { Badge, Card, EmptyState, SegmentedControl, Select, Spinner, statusTone } from "@/components/ui";
+import { Badge, Card, EmptyState, Reveal, SegmentedControl, Select, Spinner, statusTone } from "@/components/ui";
 
 type Period = "mois" | "3mois" | "12mois" | "tout";
 
@@ -114,8 +114,11 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
-          <p className="text-sm text-brand-gray">Activité commerciale · {orders.length} bon{orders.length > 1 ? "s" : ""} au total</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Direction</p>
+          <h1 className="font-display text-[28px] sm:text-[32px] font-semibold text-ink leading-tight mt-1">Tableau de bord</h1>
+          <p className="text-sm text-muted mt-1">
+            Activité commerciale · <b className="text-ink num">{orders.length}</b> bon{orders.length > 1 ? "s" : ""} au total
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <Select value={commercial} onChange={(e) => setCommercial(e.target.value)} className="sm:w-56">
@@ -141,36 +144,39 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        {kpis.map((k) => (
-          <Card key={k.label} className="p-4">
-            <div className="text-[11px] uppercase tracking-wide text-brand-gray font-semibold">{k.label}</div>
-            <div className="text-2xl font-bold tabular-nums mt-1 leading-tight">{k.value}</div>
-            <div className="text-xs text-brand-gray mt-1">{k.sub}</div>
-          </Card>
+        {kpis.map((k, i) => (
+          <Reveal key={k.label} delay={i * 0.05}>
+            <Card className="p-4 h-full" tone={i === 0 ? "night" : "panel"}>
+              <div className={`text-[10px] uppercase tracking-[0.14em] font-bold ${i === 0 ? "text-white/60" : "text-muted"}`}>{k.label}</div>
+              <div className={`num text-[26px] font-semibold mt-1.5 leading-none ${i === 0 ? "text-white" : "text-ink"}`}>{k.value}</div>
+              <div className={`text-xs mt-2 ${i === 0 ? "text-white/60" : "text-muted"}`}>{k.sub}</div>
+              {i === 0 && <div className="energy-line w-10 rounded-full mt-3" />}
+            </Card>
+          </Reveal>
         ))}
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
         <Card className="p-4 lg:col-span-3">
-          <h2 className="font-bold mb-1">Chiffre d&apos;affaires signé par mois</h2>
-          <p className="text-xs text-brand-gray mb-3">TTC, à la date de signature</p>
+          <h2 className="font-display font-semibold text-[17px]">Chiffre d&apos;affaires signé par mois</h2>
+          <p className="text-xs text-muted mb-4">TTC, à la date de signature</p>
           {data.signed.length === 0 ? (
             <EmptyState title="Aucun bon signé sur la période" />
           ) : (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.byMonth} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
-                  <CartesianGrid vertical={false} stroke="#eceae4" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#6d6e71" }} />
-                  <YAxis tickLine={false} axisLine={false} width={56} tick={{ fontSize: 11, fill: "#6d6e71" }} tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)} k€` : `${v} €`)} />
+                  <CartesianGrid vertical={false} stroke="rgba(18,33,43,0.07)" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#7a8790" }} />
+                  <YAxis tickLine={false} axisLine={false} width={56} tick={{ fontSize: 11, fill: "#7a8790" }} tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)} k€` : `${v} €`)} />
                   <Tooltip
                     cursor={{ fill: "rgba(43,132,184,0.08)" }}
                     content={({ active, payload }) =>
                       active && payload?.length ? (
-                        <div className="rounded-xl bg-white border border-gray-200 shadow px-3 py-2 text-sm">
+                        <div className="rounded-[12px] bg-night text-white shadow-[var(--shadow-float)] px-3 py-2 text-sm">
                           <div className="font-semibold">{(payload[0].payload as { label: string }).label}</div>
-                          <div>{eur0(payload[0].value as number)} TTC</div>
-                          <div className="text-brand-gray text-xs">{(payload[0].payload as { n: number }).n} bon(s) signé(s)</div>
+                          <div className="num">{eur0(payload[0].value as number)} TTC</div>
+                          <div className="text-white/60 text-xs">{(payload[0].payload as { n: number }).n} bon(s) signé(s)</div>
                         </div>
                       ) : null
                     }
@@ -183,8 +189,8 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="p-4 lg:col-span-2">
-          <h2 className="font-bold mb-1">Ventes par famille de produit</h2>
-          <p className="text-xs text-brand-gray mb-3">Montant HT des lignes signées</p>
+          <h2 className="font-display font-semibold text-[17px]">Ventes par famille de produit</h2>
+          <p className="text-xs text-muted mb-4">Montant HT des lignes signées</p>
           {data.byCategory.length === 0 ? (
             <EmptyState title="Aucune donnée" />
           ) : (
@@ -193,14 +199,14 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.byCategory} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }} barCategoryGap="24%">
                     <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="label" width={104} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#1f2328" }} />
+                    <YAxis type="category" dataKey="label" width={104} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#12212b" }} />
                     <Tooltip
                       cursor={{ fill: "rgba(0,0,0,0.04)" }}
                       content={({ active, payload }) =>
                         active && payload?.length ? (
-                          <div className="rounded-xl bg-white border border-gray-200 shadow px-3 py-2 text-sm">
+                          <div className="rounded-[12px] bg-night text-white shadow-[var(--shadow-float)] px-3 py-2 text-sm">
                             <div className="font-semibold">{(payload[0].payload as { label: string }).label}</div>
-                            <div>{eur0(payload[0].value as number)} HT</div>
+                            <div className="num">{eur0(payload[0].value as number)} HT</div>
                           </div>
                         ) : null
                       }
@@ -217,8 +223,8 @@ export default function DashboardPage() {
                 {data.byCategory.map((d) => (
                   <li key={d.id} className="flex items-center gap-2">
                     <span className="size-2.5 rounded-full" style={{ background: categoryColor(d.id as ProductCategory) }} />
-                    <span className="flex-1 text-brand-gray">{d.label}</span>
-                    <span className="font-semibold tabular-nums">{eur0(d.value)}</span>
+                    <span className="flex-1 text-muted">{d.label}</span>
+                    <span className="num font-semibold">{eur0(d.value)}</span>
                   </li>
                 ))}
               </ul>
@@ -229,14 +235,14 @@ export default function DashboardPage() {
 
       <Card className="overflow-hidden">
         <div className="px-4 pt-4 pb-2">
-          <h2 className="font-bold">Performance par commercial</h2>
+          <h2 className="font-display font-semibold text-[17px]">Performance par commercial</h2>
         </div>
         {data.byCommercial.length === 0 ? (
           <EmptyState title="Aucune activité sur la période" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-brand-gray">
+              <thead className="bg-surface text-[10.5px] uppercase tracking-[0.12em] text-muted">
                 <tr>
                   <th className="text-left font-semibold px-4 py-2.5">Commercial</th>
                   <th className="text-right font-semibold px-3 py-2.5">Signés</th>
@@ -246,15 +252,15 @@ export default function DashboardPage() {
                   <th className="text-right font-semibold px-4 py-2.5">Panier moyen</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {data.byCommercial.map((r) => (
                   <tr key={r.id}>
                     <td className="px-4 py-2.5 font-semibold">{r.name}</td>
-                    <td className="text-right px-3 py-2.5 tabular-nums">{r.signed}</td>
-                    <td className="text-right px-3 py-2.5 tabular-nums text-brand-gray">{r.drafts}</td>
-                    <td className="text-right px-3 py-2.5 tabular-nums text-brand-gray">{r.cancelled}</td>
-                    <td className="text-right px-3 py-2.5 tabular-nums font-semibold">{eur0(r.ca)}</td>
-                    <td className="text-right px-4 py-2.5 tabular-nums">{r.signed ? eur0(r.ca / r.signed) : "—"}</td>
+                    <td className="text-right px-3 py-2.5 num">{r.signed}</td>
+                    <td className="text-right px-3 py-2.5 tabular-nums text-muted">{r.drafts}</td>
+                    <td className="text-right px-3 py-2.5 tabular-nums text-muted">{r.cancelled}</td>
+                    <td className="text-right px-3 py-2.5 num font-semibold">{eur0(r.ca)}</td>
+                    <td className="text-right px-4 py-2.5 num">{r.signed ? eur0(r.ca / r.signed) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -265,7 +271,7 @@ export default function DashboardPage() {
 
       <Card className="overflow-hidden">
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <h2 className="font-bold">Derniers bons de commande</h2>
+          <h2 className="font-display font-semibold text-[17px]">Derniers bons de commande</h2>
           <Link href="/commandes" className="text-sm font-semibold text-brand-blue">
             Tout voir →
           </Link>
@@ -273,20 +279,20 @@ export default function DashboardPage() {
         {data.inPeriod.length === 0 ? (
           <EmptyState title="Aucun bon sur la période" />
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-line">
             {data.inPeriod.slice(0, 8).map((o) => (
               <li key={o.id}>
-                <Link href={`/commandes/${o.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+                <Link href={`/commandes/${o.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold truncate">
-                      {customerName(o.customer)} <span className="text-brand-gray font-normal">· {o.numero}</span>
+                      {customerName(o.customer)} <span className="font-mono text-muted font-normal text-[13px]">· {o.numero}</span>
                     </div>
-                    <div className="text-xs text-brand-gray truncate">
+                    <div className="text-xs text-muted truncate">
                       {dateFr(o.signedAt || o.createdAt)} · {o.commercialName} · {o.lines.map((l) => categoryShort(l.category)).filter((v, i, a) => a.indexOf(v) === i).join(", ")}
                     </div>
                   </div>
                   <Badge tone={statusTone(o.status)}>{STATUS_LABEL[o.status]}</Badge>
-                  <div className="w-24 text-right font-semibold tabular-nums">{eur0(computeTotals(o).totalTTC)}</div>
+                  <div className="w-24 text-right num font-semibold">{eur0(computeTotals(o).totalTTC)}</div>
                 </Link>
               </li>
             ))}

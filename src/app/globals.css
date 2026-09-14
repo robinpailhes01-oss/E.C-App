@@ -1,23 +1,49 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-blue: #3e96c4;
-  --color-brand-blue-dark: #2d7ba3;
-  --color-brand-orange: #f0902d;
-  --color-brand-orange-dark: #d97a1c;
-  --color-brand-green: #8dc63f;
-  --color-brand-green-dark: #6ea52a;
-  --color-brand-gray: #6d6e71;
-  --color-sand: #f4f3ef;
-  --color-ink: #1f2328;
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Palette sémantique */
+  --color-surface: #f6f4ee;
+  --color-surface-2: #fbfaf7;
+  --color-panel: #ffffff;
+  --color-ink: #12212b;
+  --color-ink-2: #3d4d58;
+  --color-muted: #7a8790;
+  --color-line: rgba(18, 33, 43, 0.09);
+  --color-line-strong: rgba(18, 33, 43, 0.16);
+  --color-night: #0f2733;
+  --color-night-2: #16394a;
+
+  --color-brand-blue: #1f7fb0;
+  --color-brand-blue-dark: #16607f;
+  --color-brand-blue-soft: #e4f1f8;
+  --color-brand-orange: #ef8a2a;
+  --color-brand-orange-dark: #d4741a;
+  --color-brand-orange-soft: #fdeedd;
+  --color-brand-green: #7db83a;
+  --color-brand-green-dark: #5f9a2a;
+  --color-brand-green-soft: #ecf5df;
+  --color-brand-gray: #7a8790;
+  --color-sand: #f6f4ee;
+
+  --font-sans: var(--font-manrope), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-sora), var(--font-manrope), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-card: 18px;
+  --radius-ctl: 12px;
+
+  --shadow-ambient: 0 1px 2px rgba(18, 33, 43, 0.04), 0 8px 24px -12px rgba(18, 33, 43, 0.12);
+  --shadow-float: 0 12px 40px -12px rgba(15, 39, 51, 0.45), 0 2px 6px rgba(15, 39, 51, 0.18);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
   color-scheme: light;
 }
 
-html, body {
+html,
+body {
   height: 100%;
 }
 
@@ -27,17 +53,52 @@ html {
 }
 
 body {
-  background: var(--color-sand);
+  background-color: var(--color-surface);
+  background-image:
+    radial-gradient(900px 500px at -10% -10%, rgba(31, 127, 176, 0.09), transparent 60%),
+    radial-gradient(700px 400px at 110% 0%, rgba(239, 138, 42, 0.08), transparent 60%);
+  background-attachment: fixed;
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
 }
 
-input, select, textarea {
+::selection {
+  background: rgba(239, 138, 42, 0.25);
+}
+
+input,
+select,
+textarea,
+button {
   font: inherit;
 }
 
-/* Hide number input spinners (touch UI) */
+/* Filet "énergie" : la signature visuelle de l'app */
+.energy-line {
+  height: 3px;
+  background: linear-gradient(90deg, #1f7fb0 0%, #7db83a 55%, #ef8a2a 100%);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Masque les spinners des champs numériques */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -48,6 +109,24 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* Focus clavier visible partout */
+:focus-visible {
+  outline: 2px solid var(--color-brand-blue);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @media print {
-  .no-print { display: none !important; }
+  .no-print {
+    display: none !important;
+  }
 }

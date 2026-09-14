@@ -10,7 +10,9 @@ import type { Order } from "@/lib/types";
 import { STATUS_LABEL, customerName, dateFr } from "@/lib/format";
 import { downloadOrderPdf, openOrderPdf, shareOrderPdf } from "@/lib/pdf";
 import { OrderSummary } from "@/components/order-summary";
-import { Badge, Button, Card, EmptyState, Modal, Spinner, statusTone } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Modal, Reveal, Spinner, statusTone } from "@/components/ui";
+import { computeTotals } from "@/lib/pricing";
+import { eur } from "@/lib/format";
 
 function OrderDetailInner() {
   const { id } = useParams<{ id: string }>();
@@ -60,53 +62,68 @@ function OrderDetailInner() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Link href="/commandes" className="inline-flex items-center gap-1.5 text-sm text-brand-gray hover:text-ink mb-3">
+      <Link href="/commandes" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink mb-4 transition">
         <ArrowLeft className="size-4" /> Bons de commande
       </Link>
 
       {justSigned && (
-        <div className="mb-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-800 px-4 py-3 flex items-center gap-3">
-          <CheckCircle2 className="size-5 shrink-0" />
-          <div className="text-sm">
-            <b>Bon de commande signé.</b> Téléchargez ou partagez le PDF avec le client.
+        <Reveal>
+          <div className="mb-4 rounded-[16px] bg-brand-green-soft border border-brand-green/30 text-brand-green-dark px-4 py-3 flex items-center gap-3">
+            <CheckCircle2 className="size-5 shrink-0" />
+            <div className="text-sm">
+              <b>Bon de commande signé.</b> Téléchargez ou partagez le PDF avec le client.
+            </div>
           </div>
-        </div>
+        </Reveal>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">{order.numero}</h1>
-            <Badge tone={statusTone(order.status)}>{STATUS_LABEL[order.status]}</Badge>
+      <Reveal>
+        <div className="relative overflow-hidden rounded-[var(--radius-card)] bg-night text-white p-5 sm:p-6 mb-4 shadow-[var(--shadow-float)]">
+          <div className="absolute -top-24 -right-16 size-64 rounded-full bg-brand-blue/30 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-28 -left-10 size-64 rounded-full bg-brand-orange/20 blur-3xl pointer-events-none" />
+          <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="font-mono text-[22px] sm:text-[26px] font-semibold tracking-tight">{order.numero}</h1>
+                <Badge tone={statusTone(order.status)} dot>
+                  {STATUS_LABEL[order.status]}
+                </Badge>
+              </div>
+              <p className="text-sm text-white/65 mt-1.5">
+                Créé le {dateFr(order.createdAt, true)} par {order.commercialName}
+                {order.signedAt && ` · signé le ${dateFr(order.signedAt, true)}`}
+              </p>
+              <p className="font-display text-lg font-semibold mt-3">{customerName(c)}</p>
+            </div>
+            <div className="text-left sm:text-right">
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">Total TTC</div>
+              <div className="num text-[30px] font-semibold leading-none mt-1">{eur(computeTotals(order).totalTTC)}</div>
+            </div>
           </div>
-          <p className="text-sm text-brand-gray">
-            Créé le {dateFr(order.createdAt, true)} par {order.commercialName}
-            {order.signedAt && ` · signé le ${dateFr(order.signedAt, true)}`}
-          </p>
+          <div className="relative flex flex-wrap gap-2 mt-5">
+            <Button variant="secondary" size="sm" onClick={() => run("apercu", () => openOrderPdf(order))} loading={busy === "apercu"} className="bg-white/10 border-white/15 text-white hover:bg-white/18 hover:border-white/30">
+              <ExternalLink className="size-4" /> Aperçu
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => run("dl", () => downloadOrderPdf(order))} loading={busy === "dl"} className="bg-white/10 border-white/15 text-white hover:bg-white/18 hover:border-white/30">
+              <FileDown className="size-4" /> PDF
+            </Button>
+            <Button variant="accent" size="sm" onClick={() => run("share", () => shareOrderPdf(order))} loading={busy === "share"}>
+              <Share2 className="size-4" /> Partager
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => run("apercu", () => openOrderPdf(order))} loading={busy === "apercu"}>
-            <ExternalLink className="size-4" /> Aperçu
-          </Button>
-          <Button variant="secondary" onClick={() => run("dl", () => downloadOrderPdf(order))} loading={busy === "dl"}>
-            <FileDown className="size-4" /> PDF
-          </Button>
-          <Button onClick={() => run("share", () => shareOrderPdf(order))} loading={busy === "share"}>
-            <Share2 className="size-4" /> Partager
-          </Button>
-        </div>
-      </div>
+      </Reveal>
 
       <div className="grid sm:grid-cols-2 gap-4 mb-4">
         <Card className="p-4 text-sm">
-          <div className="text-xs uppercase tracking-wide text-brand-gray font-semibold mb-1.5">Client</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted font-bold mb-1.5">Client</div>
           <div className="font-semibold">{customerName(c)}</div>
           <div>{c.adresse}</div>
           {c.complement && <div>{c.complement}</div>}
           <div>
             {c.codePostal} {c.ville}
           </div>
-          <div className="text-brand-gray mt-1">
+          <div className="text-muted mt-1">
             <a href={`tel:${c.telephone}`} className="underline decoration-dotted">
               {c.telephone}
             </a>
@@ -119,13 +136,13 @@ function OrderDetailInner() {
               </>
             )}
           </div>
-          <div className="text-brand-gray mt-1">
+          <div className="text-muted mt-1">
             {c.typeLogement === "maison" ? "Maison" : "Appartement"} · {c.proprietaire ? "Propriétaire" : "Locataire"}
             {c.chauffageActuel && ` · ${c.chauffageActuel}`}
           </div>
         </Card>
         <Card className="p-4 text-sm">
-          <div className="text-xs uppercase tracking-wide text-brand-gray font-semibold mb-1.5">Installation & signature</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted font-bold mb-1.5">Installation & signature</div>
           <div>
             Installation prévue :{" "}
             <b>{order.dateInstallationPrevue ? new Date(order.dateInstallationPrevue + "T00:00:00").toLocaleDateString("fr-FR") : "à définir"}</b>
@@ -136,18 +153,18 @@ function OrderDetailInner() {
                 ["Client", order.signatureClient],
                 ["Commercial", order.signatureCommercial],
               ].map(([label, img]) => (
-                <div key={label} className="rounded-xl border border-gray-200 bg-white p-1.5">
-                  <div className="text-[10px] uppercase tracking-wide text-brand-gray px-1">{label}</div>
+                <div key={label} className="rounded-[12px] border border-line bg-surface-2 p-1.5">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted font-bold px-1">{label}</div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {img ? <img src={img} alt={`Signature ${label}`} className="h-16 w-full object-contain" /> : <div className="h-16" />}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-brand-gray mt-1">Non signé</div>
+            <div className="text-muted mt-1">Non signé</div>
           )}
           {order.notes && (
-            <div className="mt-2 text-brand-gray">
+            <div className="mt-2 text-muted">
               <b className="text-ink">Observations :</b> {order.notes}
             </div>
           )}
@@ -179,7 +196,7 @@ function OrderDetailInner() {
       )}
 
       <Modal open={confirm !== null} onClose={() => setConfirm(null)} title={confirm === "annuler" ? "Annuler ce bon de commande ?" : "Supprimer ce brouillon ?"}>
-        <p className="text-sm text-brand-gray">
+        <p className="text-sm text-muted">
           {confirm === "annuler"
             ? "Le bon restera consultable avec le statut « Annulé » (rétractation, refus de financement…). Cette action est définitive."
             : "Le brouillon sera supprimé définitivement."}

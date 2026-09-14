@@ -58,21 +58,21 @@ export function SignatureField({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-brand-gray">{label}</span>
+        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">{label}</span>
         {locked ? (
-          <span className="text-xs font-semibold text-emerald-700">✓ Signature enregistrée</span>
+          <span className="text-xs font-semibold text-brand-green-dark">✓ Signature enregistrée</span>
         ) : (
-          <span className="text-xs text-gray-400">Signez avec le doigt ou le stylet</span>
+          <span className="text-xs text-muted/80">Signez avec le doigt ou le stylet</span>
         )}
       </div>
-      <div className="relative rounded-2xl border-2 border-dashed border-gray-300 bg-white overflow-hidden touch-none" style={{ height }}>
+      <div className={`relative rounded-[16px] border-2 bg-panel overflow-hidden touch-none transition-colors ${locked ? "border-brand-green/50" : "border-dashed border-line-strong"}`} style={{ height }}>
         {locked && value ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={value} alt={label} className="w-full h-full object-contain" />
         ) : (
           <canvas ref={canvasRef} className="w-full h-full block" />
         )}
-        {!locked && <div className="pointer-events-none absolute left-4 right-4 bottom-8 border-b border-gray-200" />}
+        {!locked && <div className="pointer-events-none absolute left-4 right-4 bottom-8 border-b border-line-strong" />}
       </div>
       <div className="flex gap-2 mt-2">
         <Button type="button" variant="secondary" size="sm" onClick={clear}>

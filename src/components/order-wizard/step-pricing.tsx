@@ -4,7 +4,7 @@ import type { Financing, Order } from "@/lib/types";
 import { FINANCING_ORGANISMS, VAT_RATES } from "@/lib/catalog";
 import { computeTotals, monthlyPayment } from "@/lib/pricing";
 import { eur } from "@/lib/format";
-import { Field, Input, SegmentedControl, Select, Textarea } from "@/components/ui";
+import { Field, Input, SectionTitle, SegmentedControl, Select, Textarea } from "@/components/ui";
 import { NumberInput } from "@/components/number-input";
 
 export function StepPricing({ order, onChange }: { order: Order; onChange: (patch: Partial<Order>) => void }) {
@@ -19,12 +19,11 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="font-bold text-lg mb-1">Tarifs</h2>
-        <p className="text-sm text-brand-gray mb-3">Les prix catalogue sont pré-remplis en HT. Vous pouvez ajuster un prix unitaire si nécessaire.</p>
+        <SectionTitle sub="Prix catalogue pré-remplis en HT, ajustables ligne par ligne.">Tarifs</SectionTitle>
         {/* Mobile : cartes */}
         <ul className="sm:hidden space-y-2.5">
           {order.lines.map((l) => (
-            <li key={l.id} className="rounded-2xl border border-gray-200 bg-white p-3.5">
+            <li key={l.id} className="rounded-[16px] border border-line bg-panel p-3.5">
               <div className="font-medium leading-snug">{l.label}</div>
               <div className="grid grid-cols-[4.5rem_1fr_auto] gap-2 items-end mt-2.5">
                 <Field label="Qté">
@@ -34,8 +33,8 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
                   <NumberInput value={l.unitPriceHT} onChange={(v) => setLine(l.id, { unitPriceHT: v ?? 0 })} suffix="€" className="text-right h-10" />
                 </Field>
                 <div className="text-right pb-2.5">
-                  <div className="text-[11px] uppercase tracking-wide text-brand-gray font-semibold">Total HT</div>
-                  <div className="font-bold tabular-nums">{eur(l.quantity * l.unitPriceHT)}</div>
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted font-bold">Total HT</div>
+                  <div className="num font-semibold">{eur(l.quantity * l.unitPriceHT)}</div>
                 </div>
               </div>
             </li>
@@ -43,9 +42,9 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
         </ul>
 
         {/* Tablette / bureau : tableau */}
-        <div className="hidden sm:block rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <div className="hidden sm:block rounded-[16px] border border-line bg-panel overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-brand-gray">
+            <thead className="bg-surface text-[10.5px] uppercase tracking-[0.12em] text-muted">
               <tr>
                 <th className="text-left font-semibold px-4 py-2.5">Désignation</th>
                 <th className="text-center font-semibold px-2 py-2.5 w-20">Qté</th>
@@ -53,7 +52,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
                 <th className="text-right font-semibold px-4 py-2.5 w-32">Total HT</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-line">
               {order.lines.map((l) => (
                 <tr key={l.id}>
                   <td className="px-4 py-2.5">
@@ -65,7 +64,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
                   <td className="px-2 py-2">
                     <NumberInput value={l.unitPriceHT} onChange={(v) => setLine(l.id, { unitPriceHT: v ?? 0 })} suffix="€" className="text-right h-10" />
                   </td>
-                  <td className="text-right px-4 py-2.5 font-semibold tabular-nums">{eur(l.quantity * l.unitPriceHT)}</td>
+                  <td className="text-right px-4 py-2.5 num font-semibold">{eur(l.quantity * l.unitPriceHT)}</td>
                 </tr>
               ))}
             </tbody>
@@ -90,7 +89,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
           </Field>
         </div>
 
-        <div className="mt-4 rounded-2xl bg-white border border-gray-200 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div className="mt-4 rounded-[16px] bg-night text-white p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <Stat label="Total HT" value={eur(t.totalHT)} />
           <Stat label={`TVA ${order.vatRate} %`} value={eur(t.tva)} />
           <Stat label="Remise" value={t.remiseHT ? `- ${eur(t.remiseHT)}` : "—"} />
@@ -99,7 +98,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
       </section>
 
       <section>
-        <h2 className="font-bold text-lg mb-3">Financement</h2>
+        <SectionTitle sub="Comptant, crédit ou mixte.">Financement</SectionTitle>
         <SegmentedControl
           value={f.mode}
           onChange={(mode) => setF({ mode, montantFinance: mode === "mixte" ? f.montantFinance : undefined })}
@@ -129,7 +128,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
         </div>
 
         {f.mode !== "comptant" && (
-          <div className="mt-4 rounded-2xl border border-brand-blue/30 bg-brand-blue/5 p-4">
+          <div className="mt-4 rounded-[16px] border border-brand-blue/25 bg-brand-blue-soft/60 p-4">
             <div className="grid sm:grid-cols-3 gap-4">
               <Field label="Organisme de crédit">
                 <Select value={f.organisme ?? ""} onChange={(e) => setF({ organisme: e.target.value })}>
@@ -145,7 +144,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
                 </Field>
               ) : (
                 <Field label="Montant financé (TTC)" hint="Total TTC moins acompte">
-                  <Input value={eur(t.montantFinance)} readOnly className="bg-gray-50" />
+                  <Input value={eur(t.montantFinance)} readOnly />
                 </Field>
               )}
               <Field label="Durée (mois)">
@@ -171,7 +170,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
         )}
 
         {f.mode === "comptant" && t.soldeComptant > 0 && (
-          <p className="text-sm mt-3 text-brand-gray">
+          <p className="text-sm mt-3 text-muted">
             Solde à régler à l&apos;installation : <b className="text-ink">{eur(t.soldeComptant)}</b>
           </p>
         )}
@@ -182,7 +181,7 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
       </section>
 
       <section>
-        <h2 className="font-bold text-lg mb-3">Observations</h2>
+        <SectionTitle sub="Imprimées sur le bon de commande.">Observations</SectionTitle>
         <Textarea value={order.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Précisions techniques, accès, contraintes de pose, matériel existant…" />
       </section>
     </div>
@@ -191,9 +190,9 @@ export function StepPricing({ order, onChange }: { order: Order; onChange: (patc
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={accent ? "rounded-xl bg-brand-orange/10 px-3 py-2" : "px-3 py-2"}>
-      <div className="text-[11px] uppercase tracking-wide text-brand-gray font-semibold">{label}</div>
-      <div className={`font-bold tabular-nums ${accent ? "text-brand-orange-dark text-lg" : "text-ink"}`}>{value}</div>
+    <div className={accent ? "rounded-[12px] bg-brand-orange px-3 py-2.5" : "px-3 py-2.5"}>
+      <div className={`text-[10px] uppercase tracking-[0.14em] font-bold ${accent ? "text-white/80" : "text-white/55"}`}>{label}</div>
+      <div className={`num font-semibold mt-0.5 ${accent ? "text-white text-xl" : "text-white text-[17px]"}`}>{value}</div>
     </div>
   );
 }

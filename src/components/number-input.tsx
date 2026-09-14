@@ -47,7 +47,7 @@ export function NumberInput({
         }}
         className={`${suffix ? "pr-10" : ""} ${className ?? ""}`}
       />
-      {suffix && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-brand-gray pointer-events-none">{suffix}</span>}
+      {suffix && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">{suffix}</span>}
     </div>
   );
 }

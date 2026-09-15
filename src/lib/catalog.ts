@@ -61,9 +61,9 @@ export const PRODUCTS: Product[] = [
   p("ssc-seul", "ssc", "SSC seul · Système solaire combiné", 16900),
   p("ssc-pac", "ssc", "SSC + Pompe à chaleur", 24900),
   // Pose & composants (prix à saisir par le commercial)
-  p("pose-install", "pose", "Installation / pose et mise en service", 0, "Prix à saisir"),
-  p("pose-onduleur", "pose", "Onduleur hybride", 0, "Prix à saisir"),
-  p("pose-batterie", "pose", "Batterie(s) supplémentaire(s)", 0, "Prix à saisir"),
+  p("pose-install", "pose", "Installation / pose et mise en service", 0),
+  p("pose-onduleur", "pose", "Onduleur hybride", 0),
+  p("pose-batterie", "pose", "Batterie(s) supplémentaire(s)", 0),
 ];
 
 export const productById = (id: string) => PRODUCTS.find((x) => x.id === id);

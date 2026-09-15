@@ -111,7 +111,7 @@ export function StepProducts({ lines, vatRate, onChange }: { lines: OrderLine[];
                   <div className="min-w-0">
                     <div className="font-semibold text-sm leading-snug">{l.label}</div>
                     <div className="text-xs text-muted">
-                      {categoryShort(l.category)} · {eur0(l.unitPriceTTC)} TTC / unité
+                      {categoryShort(l.category)} · {eur0(l.unitPriceTTC)} TTC / unité · soit {eur0(ht(l.unitPriceTTC))} HT
                     </div>
                   </div>
                 </div>

@@ -9,23 +9,30 @@ export interface Profile {
   active: boolean;
 }
 
-export type ProductCategory =
-  | "pv_sans_stockage"
-  | "pv_avec_stockage"
-  | "stockage"
-  | "pac_air_eau"
-  | "ecs"
-  | "ssc"
-  | "pose"
-  | "autre";
+export type ProductCategory = "pv" | "ballon" | "pac_air_eau" | "pac_air_air" | "ssc" | "autre";
+
+export interface ProductAttribute {
+  key: string;
+  label: string;
+  type: "text" | "select";
+  options?: string[];
+  placeholder?: string;
+}
 
 export interface Product {
   id: string;
   category: ProductCategory;
+  /** Sous-groupe affiché dans la rubrique (ex. « Kits sans stockage », « Options »). */
+  group: string;
   label: string;
-  detail?: string;
-  /** Prix conseillé TTC. 0 = prix à saisir par le commercial. */
+  /** Descriptif technique imprimé sur le bon (repris du bon papier). */
+  description?: string;
+  /** Prix conseillé TTC (affiché seulement via l'info-bulle). 0 = pas de prix conseillé. */
   priceTTC: number;
+  /** Champs complémentaires à renseigner (marque, référence, puissance…). */
+  attributes?: ProductAttribute[];
+  /** Ligne de pose / mise en service. */
+  installation?: boolean;
 }
 
 export type Civilite = "M." | "Mme" | "M. et Mme";
@@ -38,7 +45,13 @@ export interface Customer {
   complement?: string;
   codePostal: string;
   ville: string;
+  /** Adresse de chantier identique à l'adresse de facturation. */
+  chantierIdentique: boolean;
+  adresseChantier?: string;
+  codePostalChantier?: string;
+  villeChantier?: string;
   telephone: string;
+  portable?: string;
   email: string;
   typeLogement: "maison" | "appartement";
   proprietaire: boolean;
@@ -53,10 +66,16 @@ export interface OrderLine {
   productId?: string;
   category: ProductCategory;
   label: string;
+  /** Descriptif technique imprimé sous la désignation. */
+  description?: string;
   detail?: string;
+  /** Valeurs des champs complémentaires (marque, référence…). */
+  attributes?: Record<string, string>;
   quantity: number;
   /** Prix unitaire TTC saisi par le commercial (le HT et la TVA en sont déduits). */
   unitPriceTTC: number;
+  /** Taux de TVA de la ligne (%). */
+  vatRate: number;
 }
 
 export type FinancingMode = "comptant" | "credit";
@@ -85,11 +104,16 @@ export interface Financing {
   tauxAssurance?: number;
   avecAssurance?: boolean;
   dureeMois?: number;
-  reportMois?: number;
+  /** TAEG communiqué par l'organisme, figé sur le bon (%). */
+  taeg?: number;
+  /** Report de la première échéance, en jours (180 sur le bon papier). */
+  reportJours?: number;
   nbEmprunteurs?: number;
   dateNaissance1?: string;
   dateNaissance2?: string;
   enActivite?: boolean;
+  /** Prime CEE estimée (montant imprimé dans la clause CEE du bon). */
+  primeCEE?: number;
   /** Aides / primes estimées (information client, non déduites du bon). */
   aides?: number;
   commentaire?: string;
@@ -107,7 +131,10 @@ export interface Order {
   lines: OrderLine[];
   /** Remise commerciale globale en € TTC. */
   remiseTTC: number;
+  /** Taux de TVA par défaut appliqué aux nouvelles lignes (%). */
   vatRate: number;
+  /** Attestation TVA réduite : habitation de plus de deux ans, occupée à plus de 50 % à usage d'habitation. */
+  attestationTvaReduite?: boolean;
   financing: Financing;
   notes?: string;
   /** Délai d'installation annoncé au client, en mois. */
@@ -134,6 +161,8 @@ export interface AppSettings {
   tauxNominal: number;
   /** Taux d'assurance emprunteur annuel (% du capital emprunté). */
   tauxAssurance: number;
+  /** TAEG indicatif communiqué par l'organisme (%). */
+  taeg: number;
   /** Durées proposées au client, en mois. */
   dureesProposees: number[];
   organismeDefaut: string;

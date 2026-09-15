@@ -4,17 +4,13 @@ import * as React from "react";
 import { Input } from "./ui";
 
 /** Champ numérique tolérant (virgule ou point), synchronisé sur blur. */
-export function NumberInput({
-  value,
-  onChange,
-  suffix,
-  className,
-  ...rest
-}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
+type NumberInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   value: number | undefined | null;
   onChange: (v: number | undefined) => void;
   suffix?: string;
-}) {
+};
+
+export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(function NumberInput({ value, onChange, suffix, className, ...rest }, ref) {
   const fmt = (v: number | undefined | null) => (v === undefined || v === null || Number.isNaN(v) ? "" : String(v).replace(".", ","));
   const [text, setText] = React.useState(fmt(value));
   const focused = React.useRef(false);
@@ -33,6 +29,7 @@ export function NumberInput({
   return (
     <div className="relative">
       <Input
+        ref={ref}
         {...rest}
         value={text}
         inputMode="decimal"
@@ -50,4 +47,4 @@ export function NumberInput({
       {suffix && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">{suffix}</span>}
     </div>
   );
-}
+});

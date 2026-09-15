@@ -10,7 +10,12 @@ export const emptyCustomer = (): Customer => ({
   complement: "",
   codePostal: "",
   ville: "",
+  chantierIdentique: true,
+  adresseChantier: "",
+  codePostalChantier: "",
+  villeChantier: "",
   telephone: "",
+  portable: "",
   email: "",
   typeLogement: "maison",
   proprietaire: true,
@@ -38,6 +43,7 @@ export const emptyOrder = (user: Profile, settings: AppSettings): Order => ({
     organisme: settings.organismeDefaut,
     taux: settings.tauxNominal,
     tauxAssurance: settings.tauxAssurance,
+    taeg: settings.taeg,
     avecAssurance: false,
     nbEmprunteurs: 1,
     enActivite: true,
@@ -59,6 +65,11 @@ export function validateCustomer(c: Customer): CustomerErrors {
   if (!c.adresse.trim()) e.adresse = "Adresse obligatoire";
   if (!/^\d{5}$/.test(c.codePostal.trim())) e.codePostal = "Code postal à 5 chiffres";
   if (!c.ville.trim()) e.ville = "Ville obligatoire";
+  if (!c.chantierIdentique) {
+    if (!c.adresseChantier?.trim()) e.adresseChantier = "Adresse de chantier obligatoire";
+    if (!/^\d{5}$/.test((c.codePostalChantier ?? "").trim())) e.codePostalChantier = "Code postal à 5 chiffres";
+    if (!c.villeChantier?.trim()) e.villeChantier = "Ville obligatoire";
+  }
   if (c.telephone.replace(/\D/g, "").length < 10) e.telephone = "Numéro de téléphone invalide";
   if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) e.email = "E-mail invalide";
   return e;

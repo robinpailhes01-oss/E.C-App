@@ -1,8 +1,10 @@
 "use client";
 
 import type { AppSettings, Financing, Order, PaymentSchedule } from "@/lib/types";
-import { FINANCING_ORGANISMS, VAT_RATES } from "@/lib/catalog";
+import { FINANCING_ORGANISMS, VAT_RATES, productById } from "@/lib/catalog";
 import { computeTotals, paymentTable, round2, ttcToHT } from "@/lib/pricing";
+import { InfoTip } from "@/components/info-tip";
+import { attrsText } from "./step-products";
 import { eur } from "@/lib/format";
 import { Field, Input, SectionTitle, SegmentedControl, Select, Textarea, Toggle, cx } from "@/components/ui";
 import { NumberInput } from "@/components/number-input";
@@ -19,8 +21,21 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
   const f = order.financing;
   const setF = (patch: Partial<Financing>) => onChange({ financing: { ...f, ...patch } });
   const setSchedule = (key: keyof PaymentSchedule, v: number | undefined) => setF({ echeancier: { ...f.echeancier, [key]: v ?? 0 } });
-  const setLine = (id: string, patch: { quantity?: number; unitPriceTTC?: number }) =>
+  const setLine = (id: string, patch: { quantity?: number; unitPriceTTC?: number; vatRate?: number }) =>
     onChange({ lines: order.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+  const tip = (l: Order["lines"][number]) => {
+    const p = l.productId ? productById(l.productId) : undefined;
+    if (!p?.priceTTC) return null;
+    return (
+      <InfoTip label="Prix conseillé">
+        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-white/60">Prix conseillé</span>
+        <span className="block num text-[16px] font-semibold mt-0.5">{eur(p.priceTTC)} TTC</span>
+        <span className="block text-white/70">soit {eur(ttcToHT(p.priceTTC, l.vatRate))} HT</span>
+      </InfoTip>
+    );
+  };
+  const hasReducedVat = order.lines.some((l) => l.vatRate < 20);
+  const vatKeys = Object.keys(t.tvaParTaux).sort((a, b) => parseFloat(b) - parseFloat(a));
 
   const table = t.montantFinance > 0 ? paymentTable(t.montantFinance, f.taux || 0, f.tauxAssurance || 0, settings.dureesProposees) : [];
   const soldeVers = (key: keyof PaymentSchedule) => {
@@ -32,26 +47,39 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
     <div className="space-y-8">
       {/* ------------------------------------------------------------ Tarifs */}
       <section>
-        <SectionTitle sub="Prix conseillés TTC pré-remplis, ajustables ligne par ligne. Le HT et la TVA sont déduits automatiquement.">Tarifs</SectionTitle>
+        <SectionTitle sub="Prix TTC saisis par vos soins, le « i » rappelle le prix conseillé. Le HT et la TVA sont déduits automatiquement, ligne par ligne.">Tarifs</SectionTitle>
 
         {/* Mobile : cartes */}
         <ul className="sm:hidden space-y-2.5">
           {order.lines.map((l) => (
             <li key={l.id} className="rounded-[16px] border border-line bg-panel p-3.5">
               <div className="font-medium leading-snug">{l.label}</div>
-              <div className="grid grid-cols-[4.5rem_1fr_auto] gap-2 items-end mt-2.5">
+              {attrsText(l) && <div className="text-xs text-muted">{attrsText(l)}</div>}
+              <div className="grid grid-cols-[4rem_1fr_auto] gap-2 items-end mt-2.5">
                 <Field label="Qté">
                   <Input type="number" min={1} value={l.quantity} onChange={(e) => setLine(l.id, { quantity: Math.max(1, parseInt(e.target.value || "1", 10)) })} className="text-center h-10 px-1" />
                 </Field>
                 <Field label="PU TTC">
-                  <NumberInput value={l.unitPriceTTC} onChange={(v) => setLine(l.id, { unitPriceTTC: v ?? 0 })} suffix="€" className="text-right h-10" />
+                  <div className="flex items-center gap-1">
+                    <NumberInput value={l.unitPriceTTC} onChange={(v) => setLine(l.id, { unitPriceTTC: v ?? 0 })} suffix="€" className="text-right h-10" />
+                    {tip(l)}
+                  </div>
                 </Field>
                 <div className="text-right pb-2.5">
                   <div className="text-[10px] uppercase tracking-[0.12em] text-muted font-bold">Total TTC</div>
                   <div className="num font-semibold">{eur(l.quantity * l.unitPriceTTC)}</div>
                 </div>
               </div>
-              <div className="text-xs text-muted mt-1.5">soit {eur(ttcToHT(l.unitPriceTTC, order.vatRate))} HT / unité</div>
+              <div className="flex items-center justify-between gap-2 mt-2">
+                <span className="text-xs text-muted">soit {eur(ttcToHT(l.unitPriceTTC, l.vatRate))} HT / unité</span>
+                <Select value={l.vatRate} onChange={(e) => setLine(l.id, { vatRate: parseFloat(e.target.value) })} className="h-9 w-28 text-[13px]">
+                  {VAT_RATES.map((r) => (
+                    <option key={r} value={r}>
+                      TVA {r} %
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </li>
           ))}
         </ul>
@@ -63,8 +91,9 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
               <tr>
                 <th className="text-left font-semibold px-4 py-2.5">Désignation</th>
                 <th className="text-center font-semibold px-2 py-2.5 w-20">Qté</th>
-                <th className="text-right font-semibold px-2 py-2.5 w-40">PU TTC</th>
+                <th className="text-right font-semibold px-2 py-2.5 w-44">PU TTC</th>
                 <th className="text-right font-semibold px-3 py-2.5 w-28">PU HT</th>
+                <th className="text-center font-semibold px-2 py-2.5 w-28">TVA</th>
                 <th className="text-right font-semibold px-4 py-2.5 w-32">Total TTC</th>
               </tr>
             </thead>
@@ -73,14 +102,27 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
                 <tr key={l.id}>
                   <td className="px-4 py-2.5">
                     <div className="font-medium leading-snug">{l.label}</div>
+                    {attrsText(l) && <div className="text-xs text-muted">{attrsText(l)}</div>}
                   </td>
                   <td className="px-2 py-2">
                     <Input type="number" min={1} value={l.quantity} onChange={(e) => setLine(l.id, { quantity: Math.max(1, parseInt(e.target.value || "1", 10)) })} className="text-center h-10 px-1" />
                   </td>
                   <td className="px-2 py-2">
-                    <NumberInput value={l.unitPriceTTC} onChange={(v) => setLine(l.id, { unitPriceTTC: v ?? 0 })} suffix="€" className="text-right h-10" />
+                    <div className="flex items-center gap-1">
+                      <NumberInput value={l.unitPriceTTC} onChange={(v) => setLine(l.id, { unitPriceTTC: v ?? 0 })} suffix="€" className="text-right h-10" />
+                      {tip(l)}
+                    </div>
                   </td>
-                  <td className="text-right px-3 py-2.5 text-muted tabular-nums">{eur(ttcToHT(l.unitPriceTTC, order.vatRate))}</td>
+                  <td className="text-right px-3 py-2.5 text-muted tabular-nums">{eur(ttcToHT(l.unitPriceTTC, l.vatRate))}</td>
+                  <td className="px-2 py-2">
+                    <Select value={l.vatRate} onChange={(e) => setLine(l.id, { vatRate: parseFloat(e.target.value) })} className="h-10 text-[13px] px-2 pr-7">
+                      {VAT_RATES.map((r) => (
+                        <option key={r} value={r}>
+                          {r} %
+                        </option>
+                      ))}
+                    </Select>
+                  </td>
                   <td className="text-right px-4 py-2.5 num font-semibold">{eur(l.quantity * l.unitPriceTTC)}</td>
                 </tr>
               ))}
@@ -92,7 +134,7 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
           <Field label="Remise commerciale (TTC)" hint="Déduite du total TTC">
             <NumberInput value={order.remiseTTC || undefined} onChange={(v) => onChange({ remiseTTC: v ?? 0 })} suffix="€" placeholder="0" />
           </Field>
-          <Field label="Taux de TVA" hint="20 % dans la plupart des cas">
+          <Field label="TVA des prochaines lignes" hint="Chaque ligne garde son propre taux">
             <Select value={order.vatRate} onChange={(e) => onChange({ vatRate: parseFloat(e.target.value) })}>
               {VAT_RATES.map((r) => (
                 <option key={r} value={r}>
@@ -111,10 +153,31 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
 
         <div className="mt-4 rounded-[16px] bg-night text-white p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <Stat label="Total HT" value={eur(t.totalHT)} />
-          <Stat label={`TVA ${order.vatRate} %`} value={eur(t.tva)} />
+          <div className="px-3 py-2.5">
+            <div className="text-[10px] uppercase tracking-[0.14em] font-bold text-white/55">TVA</div>
+            {vatKeys.length === 0 ? (
+              <div className="num font-semibold mt-0.5 text-[17px]">—</div>
+            ) : (
+              vatKeys.map((k) => (
+                <div key={k} className="flex items-baseline gap-2">
+                  <span className="text-white/60 text-xs w-10">{k} %</span>
+                  <span className="num font-semibold text-[15px]">{eur(t.tvaParTaux[k].tva)}</span>
+                </div>
+              ))
+            )}
+          </div>
           <Stat label="Remise TTC" value={t.remiseTTC ? `- ${eur(t.remiseTTC)}` : "—"} />
           <Stat label="Total TTC" value={eur(t.totalTTC)} accent />
         </div>
+
+        {hasReducedVat && (
+          <label className="mt-4 flex items-start gap-3 rounded-[16px] border border-line bg-surface-2 p-4 text-sm cursor-pointer has-[:checked]:border-brand-green has-[:checked]:bg-brand-green-soft/50 transition-colors">
+            <input type="checkbox" checked={Boolean(order.attestationTvaReduite)} onChange={(e) => onChange({ attestationTvaReduite: e.target.checked })} className="mt-0.5 size-5 accent-brand-green" />
+            <span>
+              <b>Attestation TVA réduite.</b> Le client certifie que son habitation a plus de deux ans et est occupée à plus de 50 % à usage d&apos;habitation (imprimée sur le bon).
+            </span>
+          </label>
+        )}
       </section>
 
       {/* -------------------------------------------------------- Paiement */}
@@ -185,7 +248,8 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
               <div>
                 <div className="font-semibold">Crédit {f.organisme || settings.organismeDefaut}</div>
                 <div className="text-xs text-muted">
-                  Taux débiteur <b className="text-ink">{(f.taux ?? 0).toString().replace(".", ",")} %</b> · assurance{" "}
+                  Taux nominal <b className="text-ink">{(f.taux ?? 0).toString().replace(".", ",")} %</b> · TAEG{" "}
+                  <b className="text-ink">{(f.taeg ?? 0).toString().replace(".", ",")} %</b> · assurance{" "}
                   <b className="text-ink">{(f.tauxAssurance ?? 0).toString().replace(".", ",")} %</b> / an · fixés par la direction
                 </div>
               </div>
@@ -206,8 +270,12 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
               <Field label="Assurance emprunteur">
                 <Toggle checked={Boolean(f.avecAssurance)} onChange={(v) => setF({ avecAssurance: v })} label={f.avecAssurance ? "Avec assurance" : "Sans assurance"} />
               </Field>
-              <Field label="Report (mois)">
-                <NumberInput value={f.reportMois} onChange={(v) => setF({ reportMois: v ? Math.round(v) : undefined })} suffix="mois" placeholder="0" />
+              <Field label="Report de la 1re échéance">
+                <Select value={f.reportJours ?? 0} onChange={(e) => setF({ reportJours: parseInt(e.target.value, 10) || undefined })}>
+                  <option value={0}>Sans report</option>
+                  <option value={90}>90 jours</option>
+                  <option value={180}>180 jours</option>
+                </Select>
               </Field>
               <Field label="Nombre d'emprunteurs">
                 <Select value={f.nbEmprunteurs ?? 1} onChange={(e) => setF({ nbEmprunteurs: parseInt(e.target.value, 10) })}>
@@ -271,8 +339,11 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
           </div>
         )}
 
-        <div className="grid sm:grid-cols-2 gap-4 mt-4">
-          <Field label="Aides / primes estimées" hint="Indicatif, non déduit du bon">
+        <div className="grid sm:grid-cols-3 gap-4 mt-4">
+          <Field label="Prime CEE" hint="Montant imprimé dans la clause CEE du bon">
+            <NumberInput value={f.primeCEE} onChange={(v) => setF({ primeCEE: v })} suffix="€" placeholder="0" />
+          </Field>
+          <Field label="Autres aides estimées" hint="Indicatif, non déduit du bon">
             <NumberInput value={f.aides} onChange={(v) => setF({ aides: v })} suffix="€" placeholder="0" />
           </Field>
           <Field label="Commentaire paiement">

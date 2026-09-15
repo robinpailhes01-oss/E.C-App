@@ -105,12 +105,15 @@ export default function SettingsPage() {
         <Reveal delay={0.05}>
           <Card className="p-5 sm:p-6">
             <SectionTitle sub="Taux Domofinance en vigueur. Modifiez-le dès qu'il change : les prochains bons utiliseront la nouvelle valeur.">Financement</SectionTitle>
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Field label="Taux débiteur annuel" hint="Exemple : 6,29">
                 <NumberInput value={settings.tauxNominal} onChange={(v) => set({ tauxNominal: v ?? 0 })} suffix="%" />
               </Field>
               <Field label="Assurance emprunteur" hint="% annuel du capital emprunté">
                 <NumberInput value={settings.tauxAssurance} onChange={(v) => set({ tauxAssurance: v ?? 0 })} suffix="%" />
+              </Field>
+              <Field label="TAEG indicatif" hint="Imprimé dans le tableau de financement">
+                <NumberInput value={settings.taeg} onChange={(v) => set({ taeg: v ?? 0 })} suffix="%" />
               </Field>
               <Field label="Organisme par défaut">
                 <Select value={settings.organismeDefaut} onChange={(e) => set({ organismeDefaut: e.target.value })}>

@@ -1,5 +1,6 @@
 import type { AppSettings, Order, OrderFilter, Profile } from "../types";
 import { normalizeSettings } from "../settings";
+import { COMPANY } from "../company";
 import { normalizeOrder } from "./normalize";
 import type { DataStore } from "./store";
 
@@ -90,7 +91,7 @@ export class LocalStore implements DataStore {
       const seq = read<Record<string, number>>(KEY_SEQ, {});
       seq[year] = (seq[year] ?? 0) + 1;
       write(KEY_SEQ, seq);
-      saved = { ...saved, numero: `BC-${year}-${String(seq[year]).padStart(4, "0")}`, createdAt: saved.createdAt || now };
+      saved = { ...saved, numero: `${COMPANY.orderPrefix}-${year}-${String(seq[year]).padStart(4, "0")}`, createdAt: saved.createdAt || now };
       all.push(saved);
     } else {
       all[idx] = saved;

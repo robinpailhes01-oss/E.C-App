@@ -2,6 +2,7 @@
 
 import type { Order } from "@/lib/types";
 import { computeTotals, ttcToHT } from "@/lib/pricing";
+import { attrsText } from "./order-wizard/step-products";
 import { eur } from "@/lib/format";
 import { categoryShort } from "@/lib/catalog";
 
@@ -38,10 +39,10 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
               <tr key={l.id}>
                 <td className="px-3 sm:px-4 py-2.5">
                   <div className="font-medium leading-snug">{l.label}</div>
-                  <div className="text-xs text-muted">{[l.detail, categoryShort(l.category)].filter(Boolean).join(" · ")}</div>
+                  <div className="text-xs text-muted">{[categoryShort(l.category), attrsText(l), l.detail].filter(Boolean).join(" · ")}</div>
                   <div className="text-xs text-muted">
                     {!compact && <span className="sm:hidden">PU {eur(l.unitPriceTTC)} TTC · </span>}
-                    {eur(ttcToHT(l.unitPriceTTC, order.vatRate))} HT / unité
+                    {eur(ttcToHT(l.unitPriceTTC, l.vatRate))} HT / unité · TVA {l.vatRate} %
                   </div>
                 </td>
                 <td className="text-center px-2 py-2.5">{l.quantity}</td>
@@ -84,7 +85,7 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
               {t.mensualite && f.dureeMois ? (
                 <div>
                   <b>{f.dureeMois} mensualités de {eur(t.mensualite)}</b> {f.avecAssurance ? "avec" : "sans"} assurance · taux {String(f.taux ?? 0).replace(".", ",")} %
-                  {f.reportMois ? ` · report ${f.reportMois} mois` : ""}
+                  {f.reportJours ? ` · report ${f.reportJours} jours` : ""}
                 </div>
               ) : (
                 <div className="text-brand-orange-dark font-medium">Durée non choisie</div>
@@ -105,7 +106,11 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
               </>
             )}
             <Row label="Total HT" value={eur(t.totalHT)} />
-            <Row label={`TVA ${order.vatRate} %`} value={eur(t.tva)} />
+            {Object.keys(t.tvaParTaux)
+              .sort((a, b) => parseFloat(b) - parseFloat(a))
+              .map((k) => (
+                <Row key={k} label={`TVA ${k} %`} value={eur(t.tvaParTaux[k].tva)} />
+              ))}
           </div>
           <div className="mt-3 rounded-[12px] bg-brand-orange text-white px-4 py-3 flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em]">Total TTC</span>

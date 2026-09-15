@@ -10,7 +10,7 @@ export function StepClient({ customer, errors, onChange }: { customer: Customer;
   return (
     <div className="space-y-8">
       <section>
-        <SectionTitle sub="Identité et adresse du lieu d'installation.">Coordonnées du client</SectionTitle>
+        <SectionTitle sub="Identité et adresse de facturation.">Coordonnées du client</SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
           <Field label="Civilité" className="sm:col-span-2">
             <Select value={customer.civilite} onChange={(e) => set("civilite", e.target.value as Customer["civilite"])}>
@@ -37,13 +37,34 @@ export function StepClient({ customer, errors, onChange }: { customer: Customer;
           <Field label="Ville" required error={errors.ville} className="sm:col-span-4">
             <Input value={customer.ville} onChange={(e) => set("ville", e.target.value)} autoComplete="address-level2" />
           </Field>
-          <Field label="Téléphone" required error={errors.telephone} className="sm:col-span-3">
+          <Field label="Téléphone" required error={errors.telephone} className="sm:col-span-2">
             <Input value={customer.telephone} onChange={(e) => set("telephone", e.target.value)} inputMode="tel" type="tel" autoComplete="tel" />
           </Field>
-          <Field label="E-mail" error={errors.email} className="sm:col-span-3">
+          <Field label="Portable" className="sm:col-span-2">
+            <Input value={customer.portable ?? ""} onChange={(e) => set("portable", e.target.value)} inputMode="tel" type="tel" />
+          </Field>
+          <Field label="E-mail" error={errors.email} className="sm:col-span-2">
             <Input value={customer.email} onChange={(e) => set("email", e.target.value.trim())} inputMode="email" type="email" autoComplete="email" />
           </Field>
         </div>
+      </section>
+
+      <section>
+        <SectionTitle sub="L'adresse ci-dessus est l'adresse de facturation.">Adresse de chantier</SectionTitle>
+        <Toggle checked={customer.chantierIdentique} onChange={(v) => set("chantierIdentique", v)} label={customer.chantierIdentique ? "Identique à l'adresse de facturation" : "Adresse de chantier différente"} />
+        {!customer.chantierIdentique && (
+          <div className="grid grid-cols-1 sm:grid-cols-6 gap-4 mt-4">
+            <Field label="Adresse du chantier" required error={errors.adresseChantier} className="sm:col-span-6">
+              <Input value={customer.adresseChantier ?? ""} onChange={(e) => set("adresseChantier", e.target.value)} placeholder="N° et rue" />
+            </Field>
+            <Field label="Code postal" required error={errors.codePostalChantier} className="sm:col-span-2">
+              <Input value={customer.codePostalChantier ?? ""} onChange={(e) => set("codePostalChantier", e.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" />
+            </Field>
+            <Field label="Ville" required error={errors.villeChantier} className="sm:col-span-4">
+              <Input value={customer.villeChantier ?? ""} onChange={(e) => set("villeChantier", e.target.value)} />
+            </Field>
+          </div>
+        )}
       </section>
 
       <section>

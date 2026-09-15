@@ -3,6 +3,7 @@ import type { AppSettings } from "./types";
 export const DEFAULT_SETTINGS: AppSettings = {
   tauxNominal: 6.29,
   tauxAssurance: 1.2,
+  taeg: 6.47,
   dureesProposees: [12, 24, 36, 48, 60, 72, 84, 96, 108, 120, 144, 180],
   organismeDefaut: "Domofinance",
   tvaDefaut: 20,

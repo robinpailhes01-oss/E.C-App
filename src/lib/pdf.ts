@@ -1,29 +1,24 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Order } from "./types";
-import { computeTotals, ttcToHT } from "./pricing";
+import { computeTotals, lineHT, lineTTC } from "./pricing";
 import { COMPANY } from "./company";
-import { categoryShort } from "./catalog";
+import { CATEGORIES, categoryLabel, formatLineAttributes } from "./catalog";
 
-const BLUE: [number, number, number] = [62, 150, 196];
-const ORANGE: [number, number, number] = [240, 144, 45];
+const ORANGE: [number, number, number] = [200, 110, 40];
+const ORANGE_LIGHT: [number, number, number] = [251, 240, 228];
 const GRAY: [number, number, number] = [109, 110, 113];
 const INK: [number, number, number] = [31, 35, 40];
-const LIGHT: [number, number, number] = [244, 243, 239];
+const LINE: [number, number, number] = [222, 218, 210];
 
 const eurPdf = (n: number | null | undefined) =>
-  new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0).replace(/ | /g, " ") + " €";
-
+  new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0).replace(/[\u202f\u00a0]/g, " ") + " €";
+const pct = (n: number | undefined) => (n ?? 0).toString().replace(".", ",") + " %";
 const dateFr = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "");
-
-const dateInstallation = (order: Order) => {
-  const parts: string[] = [];
-  if (order.delaiInstallationMois) parts.push(`sous ${order.delaiInstallationMois} mois`);
-  if (order.dateInstallationPrevue) {
-    const [y, m, d] = order.dateInstallationPrevue.split("-");
-    parts.push(`prévue le ${d}/${m}/${y}`);
-  }
-  return parts.length ? parts.join(" · ") : "À définir avec le client";
+const dateInput = (iso?: string) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 };
 
 async function loadLogo(): Promise<string | null> {
@@ -41,323 +36,437 @@ async function loadLogo(): Promise<string | null> {
   }
 }
 
-const financingLabel = (o: Order) => (o.financing.mode === "comptant" ? "Paiement comptant" : `Financement par crédit${o.financing.organisme ? ` · ${o.financing.organisme}` : ""}`);
+const paymentLabel: Record<string, string> = { cheque: "chèque", virement: "virement", cb: "carte bancaire", especes: "espèces" };
 
-const paymentLabel: Record<string, string> = { cheque: "Chèque", virement: "Virement", cb: "Carte bancaire", especes: "Espèces" };
+const attrsLine = (l: Order["lines"][number]) => formatLineAttributes(l);
 
 export async function buildOrderPdf(order: Order): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const M = 14;
+  const M = 12;
+  const CW = W - 2 * M;
   const t = computeTotals(order);
   const logo = await loadLogo();
   const c = order.customer;
+  const f = order.financing;
 
+  const ensure = (need: number) => {
+    if (y + need > H - 16) {
+      doc.addPage();
+      y = M;
+    }
+  };
+  const box = (x: number, yy: number, w: number, h: number, fill?: [number, number, number]) => {
+    doc.setDrawColor(...ORANGE);
+    doc.setLineWidth(0.5);
+    if (fill) {
+      doc.setFillColor(...fill);
+      doc.roundedRect(x, yy, w, h, 2.5, 2.5, "FD");
+    } else doc.roundedRect(x, yy, w, h, 2.5, 2.5, "S");
+  };
+  const bandTitle = (label: string, yy: number) => {
+    doc.setFillColor(...ORANGE);
+    doc.roundedRect(M, yy, CW, 7, 3.5, 3.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text(label.toUpperCase(), W / 2, yy + 4.9, { align: "center" });
+  };
+  const checkbox = (x: number, yy: number, checked: boolean, label: string, size = 8) => {
+    doc.setDrawColor(...INK);
+    doc.setLineWidth(0.3);
+    doc.rect(x, yy - 2.6, 3, 3, "S");
+    if (checked) {
+      doc.setLineWidth(0.6);
+      doc.line(x + 0.6, yy - 1.1, x + 1.3, yy + 0.1);
+      doc.line(x + 1.3, yy + 0.1, x + 2.6, yy - 2.2);
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(size);
+    doc.setTextColor(...INK);
+    doc.text(label, x + 4.5, yy);
+  };
   const footer = () => {
     const pages = doc.getNumberOfPages();
     for (let i = 1; i <= pages; i++) {
       doc.setPage(i);
-      doc.setFontSize(7.5);
+      doc.setFontSize(7);
       doc.setTextColor(...GRAY);
-      const legal = [COMPANY.name, COMPANY.legalForm, COMPANY.capital && `Capital ${COMPANY.capital}`, COMPANY.siret && `SIRET ${COMPANY.siret}`, COMPANY.rcs && `RCS ${COMPANY.rcs}`, COMPANY.tvaIntra && `TVA ${COMPANY.tvaIntra}`]
-        .filter(Boolean)
-        .join(" · ");
-      doc.text(legal, M, H - 9);
-      doc.text(`${order.numero} · page ${i}/${pages}`, W - M, H - 9, { align: "right" });
-      doc.setDrawColor(...LIGHT);
-      doc.line(M, H - 12, W - M, H - 12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${COMPANY.name} · ${COMPANY.address}, ${COMPANY.postalCode} ${COMPANY.city} · RCS ${COMPANY.rcs}`, M, H - 7);
+      doc.text(`${order.numero} · page ${i}/${pages}`, W - M, H - 7, { align: "right" });
     }
   };
 
-  // ---------------------------------------------------------------- Header
+  // ================================================================ En-tête
   let y = M;
-  if (logo) doc.addImage(logo, "PNG", M, y - 2, 42, 26);
+  if (logo) doc.addImage(logo, "PNG", M, y, 36, 22);
+  doc.setDrawColor(...ORANGE);
+  doc.setLineWidth(0.6);
+  doc.line(M + 40, y + 1, M + 40, y + 21);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(...INK);
-  doc.text("BON DE COMMANDE", W - M, y + 6, { align: "right" });
-  doc.setFontSize(10);
-  doc.setTextColor(...BLUE);
-  doc.text(`N° ${order.numero}`, W - M, y + 12, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...GRAY);
-  doc.setFontSize(9);
-  doc.text(`Date : ${dateFr(order.signedAt || order.createdAt)}`, W - M, y + 17, { align: "right" });
-  doc.text(`Commercial : ${order.commercialName}`, W - M, y + 21.5, { align: "right" });
+  doc.setFontSize(11);
+  doc.setTextColor(...ORANGE);
+  doc.text("DES ÉNERGIES", M + 43, y + 6);
+  doc.text("RENOUVELABLES", M + 43, y + 11);
+  doc.setTextColor(60, 110, 150);
+  doc.text("POUR UN FUTUR DURABLE !", M + 43, y + 17);
 
-  y += 27;
+  checkbox(M + 100, y + 5, false, "DEVIS", 9);
+  checkbox(M + 100, y + 11, true, "BON DE COMMANDE", 9);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...INK);
+  doc.text(`N° ${order.numero}`, W - M, y + 5, { align: "right" });
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
+  doc.text(`Date : ${dateFr(order.signedAt || order.createdAt)}`, W - M, y + 11, { align: "right" });
+  doc.text(`Votre conseiller : ${order.commercialName}`, W - M, y + 16, { align: "right" });
+
+  y += 25;
+  doc.setFontSize(7.5);
   doc.setTextColor(...GRAY);
-  const companyLine = [COMPANY.name, [COMPANY.address, `${COMPANY.postalCode} ${COMPANY.city}`].filter(Boolean).join(", "), COMPANY.phone, COMPANY.email, COMPANY.website]
-    .filter(Boolean)
-    .join("  ·  ");
-  doc.text(companyLine, M, y);
+  doc.text(
+    `${COMPANY.name} - ${COMPANY.address} ${COMPANY.postalCode} ${COMPANY.city} - RCS ${COMPANY.rcs} - Au capital de ${COMPANY.capital} - Tél. : ${COMPANY.phone} - ${COMPANY.email}`,
+    W / 2,
+    y,
+    { align: "center" },
+  );
+  y += 4;
+
+  // ================================================================ Client
+  const clientRows: [string, string][] = [
+    ["NOM / PRÉNOM", `${c.civilite} ${c.nom} ${c.prenom}`.trim()],
+    ["ADRESSE DE FACTURATION", [c.adresse, c.complement, `${c.codePostal} ${c.ville}`].filter(Boolean).join(", ")],
+    ["ADRESSE DE CHANTIER", c.chantierIdentique ? "Identique à l'adresse de facturation" : [c.adresseChantier, `${c.codePostalChantier ?? ""} ${c.villeChantier ?? ""}`.trim()].filter(Boolean).join(", ")],
+    ["TÉL. / PORTABLE", [c.telephone, c.portable].filter(Boolean).join("  ·  ")],
+    ["EMAIL", c.email || "—"],
+  ];
+  const ch = 6 + clientRows.length * 5.2;
+  box(M, y, CW, ch);
+  clientRows.forEach(([k, v], i) => {
+    const yy = y + 5 + i * 5.2;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...ORANGE);
+    doc.text(`${k} :`, M + 4, yy);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...INK);
+    doc.setFontSize(8.5);
+    doc.text(v, M + 52, yy);
+  });
+  y += ch + 4;
+
+  // ================================================================ Produits
+  bandTitle("Produits", y);
+  y += 10;
+
+  const cats = CATEGORIES.map((x) => x.id).filter((id) => order.lines.some((l) => l.category === id));
+  for (const cat of cats) {
+    const lines = order.lines.filter((l) => l.category === cat);
+    ensure(20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...ORANGE);
+    doc.text(categoryLabel(cat).toUpperCase(), M + 2, y);
+    y += 2;
+    const body: (string | { content: string; colSpan?: number; styles?: Record<string, unknown> })[][] = [];
+    for (const l of lines) {
+      body.push([
+        { content: `${l.quantity > 1 ? `${l.quantity} × ` : ""}${l.label}`, styles: { fontStyle: "bold" } },
+        eurPdf(lineHT(l)),
+        `${eurPdf(lineTTC(l) - lineHT(l))} (${pct(l.vatRate)})`,
+        { content: eurPdf(lineTTC(l)), styles: { fontStyle: "bold" } },
+      ]);
+      const sub = [attrsLine(l), l.detail, l.description].filter(Boolean).join(" · ");
+      if (sub) body.push([{ content: sub, colSpan: 4, styles: { fontSize: 6.8, textColor: GRAY, cellPadding: { top: 0.6, bottom: 1.8, left: 3.5, right: 2 } } }]);
+    }
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M },
+      head: [["Désignation", "HT", "TVA", "TTC"]],
+      body,
+      styles: { font: "helvetica", fontSize: 8, cellPadding: 1.8, textColor: INK, lineColor: LINE, lineWidth: 0.2, valign: "middle" },
+      headStyles: { fillColor: ORANGE_LIGHT, textColor: ORANGE, fontStyle: "bold", fontSize: 7.5 },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 28, halign: "right" }, 2: { cellWidth: 34, halign: "right" }, 3: { cellWidth: 28, halign: "right" } },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+  }
+
+  if (order.notes) {
+    const notes = doc.splitTextToSize(order.notes, CW - 8) as string[];
+    ensure(10 + notes.length * 3.6);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text("Autres produits et/ou observations :", M + 2, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    notes.forEach((l, i) => doc.text(l, M + 2, y + 4.5 + i * 3.6));
+    y += 6 + notes.length * 3.6;
+  }
+  ensure(8);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY);
+  doc.text("Toutes les garanties sont des garanties fabricants. / Démarches administratives prises en charge par la société.", W / 2, y, { align: "center" });
   y += 6;
 
-  // ------------------------------------------------------------ Client block
-  const boxH = 32;
-  const half = (W - 2 * M - 4) / 2;
-  doc.setFillColor(...LIGHT);
-  doc.roundedRect(M, y, half, boxH, 2, 2, "F");
-  doc.roundedRect(M + half + 4, y, half, boxH, 2, 2, "F");
-
+  // ================================================================ Modalités de règlement
+  ensure(60);
+  doc.setFillColor(...ORANGE);
+  doc.roundedRect(M, y, CW, 7, 3.5, 3.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...BLUE);
-  doc.text("CLIENT", M + 4, y + 5.5);
-  doc.text("LIEU D'INSTALLATION / INFORMATIONS", M + half + 8, y + 5.5);
-
-  doc.setTextColor(...INK);
-  doc.setFontSize(9.5);
-  doc.text(`${c.civilite} ${c.prenom} ${c.nom}`.trim(), M + 4, y + 11.5);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(255, 255, 255);
+  doc.text("MODALITÉS DE RÈGLEMENT", M + 4, y + 4.9);
   doc.setFontSize(8.5);
-  const clientLines = [c.adresse, c.complement, `${c.codePostal} ${c.ville}`, `Tél. ${c.telephone}`, c.email].filter(Boolean) as string[];
-  clientLines.forEach((l, i) => doc.text(l, M + 4, y + 16.5 + i * 4.2));
+  const cbx = (x: number, checked: boolean, label: string) => {
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.4);
+    doc.rect(x, y + 1.9, 3.2, 3.2, "S");
+    if (checked) {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x + 0.7, y + 2.6, 1.8, 1.8, "F");
+    }
+    doc.setTextColor(255, 255, 255);
+    doc.text(label, x + 4.6, y + 4.6);
+  };
+  cbx(M + 88, f.mode === "comptant", "COMPTANT");
+  cbx(M + 120, f.mode === "credit", "FINANCEMENT");
+  y += 11;
 
-  const info = [
-    `Logement : ${c.typeLogement === "maison" ? "Maison" : "Appartement"} · ${c.proprietaire ? "Propriétaire" : "Locataire"}`,
-    c.anneeConstruction && `Année de construction : ${c.anneeConstruction}`,
-    c.surfaceM2 && `Surface : ${c.surfaceM2} m²`,
-    c.chauffageActuel && `Chauffage actuel : ${c.chauffageActuel}`,
-    c.factureAnnuelle && `Facture énergie annuelle : ${c.factureAnnuelle} €`,
-    `Installation : ${dateInstallation(order)}`,
-  ].filter(Boolean) as string[];
-  info.forEach((l, i) => doc.text(l, M + half + 8, y + 11.5 + i * 4.2));
+  // Colonne gauche : totaux HT / TVA / TTC ; colonne droite : échéancier
+  const leftX = M + 2;
+  const rightX = M + CW / 2 + 4;
+  const vatKeys = ["5.5", "10", "20"];
+  const totalsRows: [string, string, boolean?][] = [
+    ["TOTAL HT", eurPdf(t.totalHT)],
+    ...vatKeys.map((k) => [`TVA ${k.replace(".", ",")} %`, t.tvaParTaux[k] ? eurPdf(t.tvaParTaux[k].tva) : "—"] as [string, string]),
+  ];
+  if (t.remiseTTC > 0) totalsRows.push(["Remise commerciale TTC", `- ${eurPdf(t.remiseTTC)}`]);
+  totalsRows.push(["TOTAL TTC", eurPdf(t.totalTTC), true]);
 
-  y += boxH + 5;
+  let ly = y;
+  totalsRows.forEach(([k, v, strong]) => {
+    doc.setFont("helvetica", strong ? "bold" : "normal");
+    doc.setFontSize(strong ? 9.5 : 8.5);
+    doc.setTextColor(...INK);
+    doc.text(k, leftX, ly);
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.2);
+    doc.line(leftX + 34, ly + 0.8, leftX + 82, ly + 0.8);
+    doc.text(v, leftX + 82, ly, { align: "right" });
+    ly += strong ? 6.5 : 5.2;
+  });
 
-  // ----------------------------------------------------------- Lines table
+  const e = f.echeancier;
+  const sched: [string, string][] = [
+    ["ACOMPTE À LA COMMANDE", e.commande ? `${eurPdf(e.commande)}${f.acompteMode ? ` (${paymentLabel[f.acompteMode]})` : ""}` : "0,00 €"],
+    ["VERSEMENT À LA VISITE TECHNIQUE", eurPdf(e.visiteTechnique || 0)],
+    ["VERSEMENT À LA LIVRAISON", eurPdf(e.livraison || 0)],
+    ["VERSEMENT À L'INSTALLATION", eurPdf(e.installation || 0)],
+  ];
+  let ry = y;
+  sched.forEach(([k, v]) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...INK);
+    doc.text(`${k} :`, rightX, ry);
+    doc.setFont("helvetica", "bold");
+    doc.text(v, W - M - 2, ry, { align: "right" });
+    ry += 5.2;
+  });
+  ry += 1;
+  checkbox(rightX, ry, Boolean(order.delaiInstallationMois), `DÉLAI D'INSTALLATION ${order.delaiInstallationMois ?? 3} MOIS${order.dateInstallationPrevue ? ` (prévue le ${dateInput(order.dateInstallationPrevue)})` : ""}`);
+  ry += 5.2;
+  checkbox(rightX, ry, Boolean(f.reportJours), `REPORT ${f.reportJours || 180} JOURS`);
+  ry += 5.2;
+  if (f.mode === "comptant" && t.resteARepartir > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...ORANGE);
+    doc.text(`Solde restant à répartir : ${eurPdf(t.resteARepartir)}`, rightX, ry);
+    ry += 5;
+  }
+  y = Math.max(ly, ry) + 2;
+
+  // Tableau de financement (toujours imprimé, vide si comptant, comme sur le carnet)
+  ensure(24);
+  const finHead = [["Montant total", "Apport personnel", "Solde financement", "Nombre d'échéances", "Mensualité sans assurance", "Taux nominal", "TAEG", "Coût total sans assurance", "Mensualité avec assurance", "Coût total avec assurance"]];
+  const credit = f.mode === "credit" && t.montantFinance > 0;
+  const finBody = [
+    credit
+      ? [
+          eurPdf(t.totalTTC),
+          eurPdf(t.acomptes),
+          eurPdf(t.montantFinance),
+          f.dureeMois ? String(f.dureeMois) : "",
+          t.mensualiteHorsAssurance ? eurPdf(t.mensualiteHorsAssurance) : "",
+          pct(f.taux),
+          f.taeg ? pct(f.taeg) : "",
+          t.coutTotalHorsAssurance ? eurPdf(t.coutTotalHorsAssurance) : "",
+          f.avecAssurance && t.mensualite ? eurPdf(t.mensualite) : "",
+          f.avecAssurance && t.coutTotalCredit ? eurPdf(t.coutTotalCredit) : "",
+        ]
+      : ["", "", "", "", "", "", "", "", "", ""],
+  ];
   autoTable(doc, {
     startY: y,
     margin: { left: M, right: M },
-    head: [["Désignation", "Qté", "PU HT", "PU TTC", "Total TTC"]],
-    body: order.lines.map((l) => [
-      { content: `${l.label}${l.detail ? `\n${l.detail}` : ""}\n${categoryShort(l.category)}`, styles: {} },
-      String(l.quantity),
-      eurPdf(ttcToHT(l.unitPriceTTC, order.vatRate)),
-      eurPdf(l.unitPriceTTC),
-      eurPdf(l.quantity * l.unitPriceTTC),
-    ]),
-    styles: { font: "helvetica", fontSize: 9, cellPadding: 2, textColor: INK, lineColor: [230, 230, 230], lineWidth: 0.2 },
-    headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold" },
-    columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 12, halign: "center" }, 2: { cellWidth: 26, halign: "right" }, 3: { cellWidth: 26, halign: "right" }, 4: { cellWidth: 30, halign: "right" } },
-    alternateRowStyles: { fillColor: [250, 250, 248] },
-    didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === 0) {
-        data.cell.styles.fontStyle = "normal";
-      }
-    },
+    head: finHead,
+    body: finBody,
+    styles: { font: "helvetica", fontSize: 6.5, cellPadding: 1.2, halign: "center", valign: "middle", lineColor: LINE, lineWidth: 0.2, textColor: INK, minCellHeight: 8, overflow: "linebreak" },
+    headStyles: { fillColor: ORANGE, textColor: 255, fontStyle: "bold", fontSize: 6.2 },
+    bodyStyles: { fontStyle: "bold" },
   });
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 3;
 
-  // ---------------------------------------------------------------- Totals
-  const totalsRows: [string, string, boolean?][] = [];
-  if (t.remiseTTC > 0) {
-    totalsRows.push(["Sous-total TTC", eurPdf(t.brutTTC)]);
-    totalsRows.push(["Remise commerciale TTC", `- ${eurPdf(t.remiseTTC)}`]);
-  }
-  totalsRows.push(["Total HT", eurPdf(t.totalHT)]);
-  totalsRows.push([`TVA ${order.vatRate.toString().replace(".", ",")} %`, eurPdf(t.tva)]);
-  totalsRows.push(["TOTAL TTC", eurPdf(t.totalTTC), true]);
-
-  const tw = 80;
-  const tx = W - M - tw;
-  totalsRows.forEach(([label, val, strong]) => {
-    if (strong) {
-      doc.setFillColor(...ORANGE);
-      doc.roundedRect(tx, y - 1, tw, 8, 1.5, 1.5, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      doc.text(label, tx + 3, y + 4.5);
-      doc.text(val, tx + tw - 3, y + 4.5, { align: "right" });
-      y += 9;
-    } else {
-      doc.setTextColor(...INK);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.5);
-      doc.text(label, tx + 3, y + 4);
-      doc.text(val, tx + tw - 3, y + 4, { align: "right" });
-      y += 6;
-    }
-  });
-  y += 4;
-
-  // ------------------------------------------------------------ Financement
-  const f = order.financing;
-  const e = f.echeancier;
-  const finLines: string[] = [financingLabel(order)];
-  const sched = [
-    ["À la commande", e.commande],
-    ["À la visite technique", e.visiteTechnique],
-    ["À la livraison", e.livraison],
-    ["À l'installation", e.installation],
-  ] as [string, number][];
-  const schedTxt = sched.map(([l, v]) => `${l} : ${eurPdf(v || 0)}`).join("   ·   ");
-  finLines.push((f.mode === "comptant" ? "Échéancier · " : "Apport · ") + schedTxt);
-  if ((e.commande || 0) > 0 && f.acompteMode) finLines.push(`Acompte à la commande réglé par ${paymentLabel[f.acompteMode].toLowerCase()}${f.chequeRecupere ? " (chèque remis au commercial)" : ""}`);
-  if (f.mode === "comptant" && t.resteARepartir > 0) finLines.push(`Solde restant à régler : ${eurPdf(t.resteARepartir)}`);
-  if (f.mode === "credit") {
-    finLines.push(`Montant financé : ${eurPdf(t.montantFinance)}${f.taux ? ` · taux débiteur annuel fixe ${f.taux.toString().replace(".", ",")} %` : ""}`);
-    if (t.mensualite && f.dureeMois) {
-      finLines.push(
-        `${f.dureeMois} mensualités de ${eurPdf(t.mensualite)} ${f.avecAssurance ? "assurance incluse" : "hors assurance"}` +
-          (t.assuranceMensuelle ? ` (dont assurance ${eurPdf(t.assuranceMensuelle)} / mois)` : "") +
-          (f.reportMois ? ` · report de ${f.reportMois} mois` : ""),
-      );
-      if (t.coutTotalCredit) finLines.push(`Montant total dû : ${eurPdf(t.coutTotalCredit)}`);
-    } else {
-      finLines.push("Durée du crédit à définir.");
-    }
+  if (credit) {
+    ensure(10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...INK);
     const emp = [
+      f.organisme ? `Organisme : ${f.organisme}` : null,
       f.nbEmprunteurs ? `${f.nbEmprunteurs} emprunteur${f.nbEmprunteurs > 1 ? "s" : ""}` : null,
-      f.dateNaissance1 ? `né(e) le ${dateFr(f.dateNaissance1)}` : null,
-      f.dateNaissance2 ? `et le ${dateFr(f.dateNaissance2)}` : null,
+      f.dateNaissance1 ? `né(e) le ${dateInput(f.dateNaissance1)}` : null,
+      f.dateNaissance2 ? `et le ${dateInput(f.dateNaissance2)}` : null,
       f.enActivite === false ? "sans activité" : null,
+      f.avecAssurance ? "avec assurance emprunteur" : "sans assurance emprunteur",
     ].filter(Boolean);
-    if (emp.length) finLines.push(emp.join(" · "));
-    finLines.push("Vente conclue sous réserve d'acceptation du dossier de financement par l'organisme prêteur (art. L312-45 du Code de la consommation).");
+    doc.text(emp.join(" · ") + ". Vente conclue sous réserve d'acceptation du dossier de financement par l'organisme prêteur (art. L312-45 du Code de la consommation).", M + 2, y, { maxWidth: CW - 4 });
+    y += 8;
   }
-  if (f.aides && f.aides > 0) finLines.push(`Aides / primes estimées (à titre indicatif, non contractuel) : ${eurPdf(f.aides)}`);
-  if (f.commentaire) finLines.push(f.commentaire);
 
-  const finH = 9 + finLines.length * 4.4;
-  if (y + finH > H - 70) {
-    doc.addPage();
-    y = M;
-  }
-  doc.setFillColor(...LIGHT);
-  doc.roundedRect(M, y, W - 2 * M, finH, 2, 2, "F");
+  // ================================================================ Clauses
+  ensure(40);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...BLUE);
-  doc.text("MODALITÉS DE PAIEMENT ET FINANCEMENT", M + 4, y + 5.5);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...INK);
+  doc.text("Clause de réserve de propriété : La marchandise reste la pleine propriété du vendeur jusqu'au complet paiement du prix.", M + 2, y);
+  y += 4.5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.8);
+  doc.setTextColor(...GRAY);
+  const cee = doc.splitTextToSize(
+    `« Tout ou partie des travaux relatifs à ce devis ou bon de commande sont éligibles à une prime d'un montant de ${f.primeCEE ? eurPdf(f.primeCEE) : "______________ euros"} dont EDF (SIREN 552 081 317) est à l'origine dans le cadre du dispositif des Certificats d'Économies d'Énergie. Le montant de cette prime ne pourra être révisé à la baisse qu'en cas de modification du volume de Certificats d'Économies d'Énergie attaché à l'opération ou aux opérations d'économies d'énergie ou de la situation de précarité énergétique et ce, de manière proportionnelle. Dans le cadre de la réglementation un contrôle qualité des travaux sur site ou par contact pourra être demandé. Un refus de ce contrôle sur site ou par contact via EDF ou un prestataire d'EDF conduira au refus de cette prime par EDF. »`,
+    CW - 4,
+  ) as string[];
+  cee.forEach((l, i) => doc.text(l, M + 2, y + i * 3.1));
+  y += cee.length * 3.1 + 4;
+
+  // Reconnaissance CGV + attestation TVA
+  ensure(34);
+  const half = CW / 2 - 3;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...INK);
+  const rec = doc.splitTextToSize(
+    "Je reconnais avoir pris connaissance et accepté les conditions générales de vente figurant au verso du présent bon de commande et avoir eu communication d'une manière claire et compréhensible de toutes les informations et renseignements visés à l'article L.111-1 du Code de la Consommation. Je reconnais avoir reçu le formulaire de rétractation joint et disposer d'un délai de 14 jours pour l'exercer (art. L221-18 du Code de la consommation).",
+    half,
+  ) as string[];
+  rec.forEach((l, i) => doc.text(l, M + 2, y + i * 3.3));
+
+  const hasReduced = order.lines.some((l) => l.vatRate < 20);
+  const rx = M + half + 8;
+  checkbox(rx, y, order.lines.some((l) => l.vatRate === 5.5), "TVA à 5,5 %", 7.5);
+  checkbox(rx + 30, y, order.lines.some((l) => l.vatRate === 10), "TVA à 10 %", 7.5);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...INK);
+  const att = doc.splitTextToSize(
+    `Je soussigné(e) ${hasReduced && order.attestationTvaReduite ? `${c.prenom} ${c.nom}` : "______________________"} certifie que mon habitation a plus de deux ans et est occupée à plus de 50 % à usage d'habitation.`,
+    half - 2,
+  ) as string[];
+  att.forEach((l, i) => doc.text(l, rx, y + 5 + i * 3.3));
+  y += Math.max(rec.length * 3.3, 5 + att.length * 3.3) + 5;
+
+  // ================================================================ Signatures
+  ensure(42);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  finLines.forEach((l, i) => doc.text(l, M + 4, y + 11 + i * 4.4));
-  y += finH + 4;
-
-  if (order.notes) {
-    const notes = doc.splitTextToSize(order.notes, W - 2 * M - 8) as string[];
-    const nh = 9 + notes.length * 4.2;
-    if (y + nh > H - 70) {
-      doc.addPage();
-      y = M;
-    }
-    doc.setFillColor(...LIGHT);
-    doc.roundedRect(M, y, W - 2 * M, nh, 2, 2, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...BLUE);
-    doc.text("OBSERVATIONS", M + 4, y + 5.5);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...INK);
-    notes.forEach((l, i) => doc.text(l, M + 4, y + 11 + i * 4.2));
-    y += nh + 4;
-  }
-
-  // ------------------------------------------------------------- Signatures
-  if (y > H - 68) {
-    doc.addPage();
-    y = M;
-  }
-  doc.setFontSize(7.5);
-  doc.setTextColor(...GRAY);
-  const mentions = doc.splitTextToSize(
-    `Le client reconnaît avoir pris connaissance des conditions générales de vente et du formulaire de rétractation figurant en page suivante, et en avoir reçu un exemplaire. ` +
-      `Conformément aux articles L221-18 et suivants du Code de la consommation, le client dispose d'un délai de ${COMPANY.withdrawalDays} jours à compter de la signature du présent bon pour exercer son droit de rétractation, sans avoir à motiver sa décision. ` +
-      `Aucun paiement ne peut être exigé avant l'expiration d'un délai de 7 jours à compter de la conclusion du contrat pour une vente hors établissement (art. L221-10). ` +
-      `Les prix s'entendent pose et mise en service comprises, hors travaux non prévus au présent bon.`,
-    W - 2 * M,
-  ) as string[];
-  mentions.forEach((l, i) => doc.text(l, M, y + i * 3.4));
-  y += mentions.length * 3.4 + 4;
-
-  doc.setFontSize(9);
-  doc.setTextColor(...INK);
-  doc.text(`Fait à ${order.lieuSignature || c.ville || "____________"}, le ${dateFr(order.signedAt) || "____/____/________"}`, M, y);
-  y += 4;
-
-  const sigW = (W - 2 * M - 6) / 2;
-  const sigH = 34;
+  doc.text(`Fait à ${order.lieuSignature || c.ville || "____________"}, le ${dateFr(order.signedAt) || "____/____/________"}`, M + 2, y);
+  y += 3;
+  const sigW = (CW - 6) / 2;
+  const sigH = 32;
   const drawSig = (x: number, title: string, sub: string, img?: string) => {
-    doc.setDrawColor(200, 200, 200);
-    doc.roundedRect(x, y, sigW, sigH, 2, 2, "S");
+    box(x, y, sigW, sigH);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(...GRAY);
+    doc.setTextColor(...ORANGE);
     doc.text(title, x + 3, y + 5);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.text(sub, x + 3, y + 9);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...GRAY);
+    doc.text(sub, x + 3, y + 8.5);
     if (img) {
       try {
-        doc.addImage(img, "PNG", x + 3, y + 10, sigW - 6, sigH - 12, undefined, "FAST");
+        doc.addImage(img, "PNG", x + 3, y + 9.5, sigW - 6, sigH - 11, undefined, "FAST");
       } catch {
-        /* ignore corrupt image */
+        /* image illisible */
       }
     }
   };
-  drawSig(M, "SIGNATURE DU CLIENT", `Précédée de la mention « Lu et approuvé, bon pour commande »`, order.signatureClient);
-  drawSig(M + sigW + 6, "SIGNATURE DU COMMERCIAL", `Pour ${COMPANY.name}`, order.signatureCommercial);
+  drawSig(M, "SIGNATURE DU CLIENT", "Précédée de la mention « Bon pour accord »", order.signatureClient);
+  drawSig(M + sigW + 6, "SIGNATURE DE VOTRE CONSEILLER", order.commercialName, order.signatureCommercial);
   y += sigH;
 
-  // ------------------------------------------------ Page CGV + rétractation
+  // ================================================================ CGV (verso)
   doc.addPage();
   y = M;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...INK);
-  doc.text("CONDITIONS GÉNÉRALES DE VENTE (extrait)", M, y + 4);
+  doc.text("CONDITIONS GÉNÉRALES DE VENTE", M, y + 4);
   y += 10;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...INK);
+  doc.setFontSize(7.6);
   const cgv = [
-    `1. Objet. Le présent bon de commande a pour objet la fourniture et la pose des équipements désignés ci-avant par ${COMPANY.name}, ci-après « le Prestataire », au domicile du client.`,
-    `2. Prix. Les prix sont exprimés en euros, hors taxes et toutes taxes comprises, au taux de TVA applicable au jour de la commande. Ils comprennent la fourniture du matériel, la pose et la mise en service, sauf mention contraire portée au bon de commande.`,
-    `3. Droit de rétractation. Le client dispose d'un délai de ${COMPANY.withdrawalDays} jours à compter de la signature du présent bon pour exercer son droit de rétractation, sans motif ni pénalité, en adressant le formulaire ci-dessous ou toute déclaration dénuée d'ambiguïté au Prestataire par courrier recommandé ou par courriel. Les sommes éventuellement versées seront restituées dans un délai maximum de 14 jours.`,
-    `4. Paiement. Aucun paiement ne peut être exigé ni reçu avant l'expiration d'un délai de 7 jours à compter de la conclusion du contrat hors établissement. Le solde est exigible à la fin des travaux, sauf financement par un organisme de crédit. En cas de financement, la commande est conclue sous la condition suspensive d'obtention du crédit (art. L312-45 du Code de la consommation).`,
-    `5. Délais. La date d'installation indiquée est donnée à titre indicatif et sera confirmée par le Prestataire après visite technique et obtention des autorisations administratives éventuelles (déclaration préalable, demande de raccordement). Le Prestataire ne saurait être tenu responsable des retards imputables aux tiers ou aux administrations.`,
-    `6. Visite technique. La commande est conclue sous réserve de la faisabilité technique constatée lors de la visite technique. En cas d'impossibilité technique, le bon de commande est annulé de plein droit et les sommes versées restituées intégralement.`,
-    `7. Garanties. Les équipements bénéficient de la garantie légale de conformité et de la garantie des vices cachés, ainsi que des garanties constructeur. La pose est couverte par l'assurance responsabilité civile professionnelle et décennale du Prestataire${COMPANY.insurance ? ` (${COMPANY.insurance})` : ""}.`,
-    `8. Aides et primes. Les montants d'aides ou de primes éventuellement mentionnés sont fournis à titre indicatif, sur la base des informations communiquées par le client et de la réglementation en vigueur. Leur obtention dépend des organismes concernés et ne constitue pas une condition du présent contrat, sauf mention expresse.`,
-    `9. Données personnelles. Les données recueillies sont nécessaires au traitement de la commande et sont conservées pendant la durée légale. Le client dispose d'un droit d'accès, de rectification et d'effacement en s'adressant au Prestataire.`,
-    `10. Litiges. En cas de litige, le client peut recourir gratuitement à un médiateur de la consommation. À défaut d'accord amiable, les tribunaux compétents sont ceux du lieu du domicile du client.`,
+    `1. Objet. Le présent bon de commande a pour objet la fourniture et la pose des équipements désignés au recto par ${COMPANY.name}, ci-après « le Prestataire », au domicile du client. Toutes les garanties mentionnées sont des garanties fabricants.`,
+    `2. Prix. Les prix sont exprimés en euros, hors taxes et toutes taxes comprises, au taux de TVA applicable au jour de la commande. Le taux réduit de TVA (5,5 % ou 10 %) est appliqué sur la base de l'attestation du client relative à l'ancienneté et à l'usage de son habitation ; toute déclaration inexacte entraîne la facturation du complément de TVA au client.`,
+    `3. Droit de rétractation. Pour toute vente conclue hors établissement, le client dispose d'un délai de ${COMPANY.withdrawalDays} jours à compter de la signature du présent bon pour exercer son droit de rétractation, sans motif ni pénalité, en adressant le formulaire joint ou toute déclaration dénuée d'ambiguïté au Prestataire par courrier recommandé ou par courriel. Les sommes éventuellement versées seront restituées dans un délai maximum de 14 jours.`,
+    `4. Paiement. Aucun paiement ne peut être exigé ni reçu avant l'expiration d'un délai de 7 jours à compter de la conclusion du contrat hors établissement (art. L221-10). Les versements suivent l'échéancier porté au recto. En cas de financement, la commande est conclue sous la condition suspensive d'obtention du crédit (art. L312-45 du Code de la consommation).`,
+    `5. Réserve de propriété. La marchandise reste la pleine propriété du vendeur jusqu'au complet paiement du prix.`,
+    `6. Délais et démarches. Le délai d'installation indiqué court à compter de la visite technique et de l'obtention des autorisations administratives (déclaration préalable, raccordement, Consuel), démarches prises en charge par la société. Le Prestataire ne saurait être tenu responsable des retards imputables aux tiers ou aux administrations.`,
+    `7. Visite technique. La commande est conclue sous réserve de la faisabilité technique constatée lors de la visite technique. En cas d'impossibilité technique, le bon de commande est annulé de plein droit et les sommes versées restituées intégralement.`,
+    `8. Garanties. Les équipements bénéficient de la garantie légale de conformité et de la garantie des vices cachés, ainsi que des garanties constructeur indiquées au recto. La pose est couverte par l'assurance responsabilité civile professionnelle et décennale du Prestataire${COMPANY.insurance ? ` (${COMPANY.insurance})` : ""}.`,
+    `9. Primes et aides. Les montants de primes (CEE, MaPrimeRénov', prime à l'autoconsommation…) éventuellement mentionnés sont fournis à titre indicatif sur la base des informations communiquées par le client et de la réglementation en vigueur. Leur obtention dépend des organismes concernés.`,
+    `10. Données personnelles. Les données recueillies sont nécessaires au traitement de la commande et conservées pendant la durée légale. Le client dispose d'un droit d'accès, de rectification et d'effacement en s'adressant au Prestataire (${COMPANY.email}).`,
+    `11. Litiges. En cas de litige, le client peut recourir gratuitement à un médiateur de la consommation. À défaut d'accord amiable, les tribunaux compétents sont ceux du lieu du domicile du client.`,
   ];
+  doc.setTextColor(...INK);
   cgv.forEach((para) => {
-    const lines = doc.splitTextToSize(para, W - 2 * M) as string[];
+    const lines = doc.splitTextToSize(para, CW) as string[];
     lines.forEach((l) => {
       doc.text(l, M, y);
-      y += 3.6;
+      y += 3.4;
     });
-    y += 1.6;
+    y += 1.4;
   });
 
-  y += 6;
+  y += 5;
   doc.setDrawColor(...GRAY);
   doc.setLineDashPattern([2, 1.5], 0);
   doc.line(M, y, W - M, y);
   doc.setLineDashPattern([], 0);
   y += 8;
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text("FORMULAIRE DE RÉTRACTATION", M, y);
   y += 5;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(7.6);
   doc.setTextColor(...GRAY);
   doc.text("(Veuillez compléter et renvoyer le présent formulaire uniquement si vous souhaitez vous rétracter du contrat.)", M, y);
   y += 7;
   doc.setTextColor(...INK);
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   const retract = [
-    `À l'attention de ${COMPANY.name}${COMPANY.address ? `, ${COMPANY.address}, ${COMPANY.postalCode} ${COMPANY.city}` : ""}${COMPANY.email ? ` · ${COMPANY.email}` : ""} :`,
+    `À l'attention de ${COMPANY.name}, ${COMPANY.address}, ${COMPANY.postalCode} ${COMPANY.city} · ${COMPANY.email} :`,
     `Je/nous (*) vous notifie/notifions (*) par la présente ma/notre (*) rétractation du contrat portant sur la vente du bien / la prestation de services (*) ci-dessous :`,
     `Commandé le : ${dateFr(order.signedAt || order.createdAt)}  ·  Bon de commande n° ${order.numero}`,
     `Nom du (des) consommateur(s) : ${c.civilite} ${c.prenom} ${c.nom}`,
@@ -369,10 +478,10 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
     `(*) Rayez la mention inutile.`,
   ];
   retract.forEach((l) => {
-    const wrapped = l ? (doc.splitTextToSize(l, W - 2 * M) as string[]) : [""];
+    const wrapped = l ? (doc.splitTextToSize(l, CW) as string[]) : [""];
     wrapped.forEach((w) => {
       doc.text(w, M, y);
-      y += 5.2;
+      y += 5;
     });
   });
 

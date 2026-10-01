@@ -7,13 +7,17 @@ tableau de bord pour la direction.
 ## Fonctionnalités
 
 - **Parcours de vente en 4 étapes** : coordonnées client → choix des produits → tarifs (HT / TVA 20 % / TTC) et financement → récapitulatif et signature.
-- **Grille tarifaire intégrée** (`src/lib/catalog.ts`) : photovoltaïque avec / sans stockage, stockage seul, pompe à chaleur air-eau, ECS, SSC. Prix ajustables ligne par ligne, remise globale, ligne personnalisée.
-- **Financement** : comptant, crédit ou mixte ; acompte, organisme, durée, TAEG, mensualité calculée automatiquement, aides estimées.
+- **Grille tarifaire intégrée** (`src/lib/catalog.ts`) : kits PV sans stockage (3 / 6 / 9 kW + personnalisé), kits avec micro-onduleurs et onduleur hybride, stockage seul, pompe à chaleur air-eau (TVA 5,5 %), ECS, SSC, options (batterie virtuelle MyLight, dépose / repose toiture, bornes de recharge). Marque et référence obligatoires sur chaque produit. Le prix conseillé n'est affiché que dans une info-bulle « i ».
+- **Tarification TTC** : le prix saisi est TTC, installation comprise. L'installation (15 % du TTC, taux modifiable par la direction et figé sur chaque bon) est déduite du matériel et affichée séparément avec son HT et sa TVA 20 %.
+- **Règlement** : échéancier et mode (chèque ou virement) obligatoires. **Financement** : Sofinco / Domofinance / Autre, intérêts normal / compensé / gratuit, assurance DIM, situation activité / retraite, report 180 jours, mensualité calculée. Les taux de chaque organisme sont modifiables par la direction (tableau de bord) et figés sur chaque bon.
 - **Signature sur place** (client + commercial) au doigt ou au stylet.
 - **PDF du bon de commande** généré sur l'appareil (fonctionne hors ligne) : bon, mentions légales, CGV, formulaire de rétractation. Téléchargement ou partage natif (AirDrop, mail, WhatsApp…).
-- **Suivi** : brouillons, bons signés, annulés, recherche.
-- **Tableau de bord direction** : CA signé, panier moyen, taux de signature, part financée, CA par mois, ventes par famille de produit, performance par commercial.
-- **Rôles** : `commercial` (ne voit que ses bons) et `directeur` (voit tout).
+- **Suivi des bons** : en cours, signés, annulés, recherche.
+- **Suivi de dossier (secrétariat)** : fiche par bon signé reprenant le cahier papier : visite technique, livraison, pose, commande du matériel (fournisseur / date), acompte et solde, décision de l'organisme financier, DP mairie, contrat Enedis, Consuel, liste des documents (CNI, RIB, bulletin de salaire, avis d'impôt, mandat DP, justificatif de domicile, facture d'électricité, photo disjoncteur + compteur) avec prise de photo, observations. Enregistrement automatique et barre d'avancement. Le commercial voit l'avancement de ses dossiers en lecture seule.
+- **La semaine** : agenda des poses, visites techniques, livraisons et SAV planifiés. La direction et la secrétaire planifient et mettent à jour ; le vendeur suit l'avancement de ses chantiers.
+- **SAV** : déclaration depuis l'espace commercial, secrétariat ou direction, avec photos, urgence, suivi par commentaires, statut et planification.
+- **Tableau de bord direction** : période personnalisable, CA signé, panier moyen, taux de signature, part financée, CA par mois, ventes par famille, performance par commercial, tuiles SAV / poses / dossiers en cours, taux des organismes de financement.
+- **Rôles** : `commercial` (ne voit que ses bons, dossiers et SAV), `secretaire` (suivi de dossiers, semaine, SAV) et `directeur` (voit tout, paramètres).
 
 ## Démarrer
 
@@ -28,9 +32,9 @@ trois comptes fictifs sont proposés et les données sont stockées dans le navi
 ## Brancher Supabase (usage en équipe)
 
 1. Créer un projet sur https://supabase.com.
-2. Dans l'éditeur SQL du projet, exécuter dans l'ordre `supabase/migrations/0001_init.sql` puis
-   `supabase/migrations/0002_ttc_echeancier_settings.sql` (tables `profiles`, `orders`, `settings`,
-   numérotation automatique `BC-AAAA-0001`, sécurité par rôle).
+2. Dans l'éditeur SQL du projet, exécuter dans l'ordre les fichiers de `supabase/migrations/` (`0001` à `0004`) :
+   tables `profiles`, `orders`, `settings`, `dossiers`, `sav`, numérotation automatique `EC-AAAA-0001`,
+   rôle `secretaire`, bucket privé `dossiers` pour les photos, sécurité par rôle.
 3. Copier `.env.example` en `.env.local` et renseigner :
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
@@ -41,6 +45,7 @@ trois comptes fictifs sont proposés et les données sont stockées dans le navi
    ```sql
    update public.profiles set role = 'directeur', full_name = 'Prénom Nom' where email = 'direction@...';
    ```
+   Pour la secrétaire, utiliser `role = 'secretaire'`.
    Le nom affiché sur les bons est `full_name` (modifiable dans la table `profiles`).
 5. Déployer (Vercel : importer le dépôt et ajouter les deux variables d'environnement).
 

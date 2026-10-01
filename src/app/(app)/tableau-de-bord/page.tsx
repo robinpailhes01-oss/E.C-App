@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getStore } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
-import type { Order, Profile, ProductCategory } from "@/lib/types";
+import type { DossierSuivi, Order, Profile, ProductCategory, Sav } from "@/lib/types";
+import { computeProgress, addDays, emptyDossier, mondayOf } from "@/lib/dossier";
+import { CalendarDays, FolderKanban, LifeBuoy } from "lucide-react";
 import { computeTotals } from "@/lib/pricing";
 import { CATEGORIES, categoryColor, categoryShort } from "@/lib/catalog";
 import { STATUS_LABEL, customerName, dateFr, eur0, monthKey, monthLabel } from "@/lib/format";
@@ -32,6 +34,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [orders, setOrders] = React.useState<Order[] | null>(null);
   const [profiles, setProfiles] = React.useState<Profile[]>([]);
+  const [dossiers, setDossiers] = React.useState<DossierSuivi[]>([]);
+  const [savs, setSavs] = React.useState<Sav[]>([]);
   const [period, setPeriod] = React.useState<Period>("12mois");
   const [commercial, setCommercial] = React.useState("");
   const [from, setFrom] = React.useState(() => {
@@ -46,8 +50,10 @@ export default function DashboardPage() {
       router.replace("/commandes");
       return;
     }
-    Promise.all([getStore().listOrders(), getStore().listProfiles()]).then(([o, p]) => {
+    Promise.all([getStore().listOrders(), getStore().listProfiles(), getStore().listDossiers(), getStore().listSav()]).then(([o, p, d, sv]) => {
       setOrders(o);
+      setDossiers(d);
+      setSavs(sv);
       setProfiles(p.filter((x) => x.role === "commercial" || o.some((y) => y.commercialId === x.id)));
     });
   }, [user.role, router]);
@@ -190,6 +196,40 @@ export default function DashboardPage() {
           </Reveal>
         ))}
       </div>
+
+      {(() => {
+        const week0 = isoDay(mondayOf(new Date()));
+        const week1 = isoDay(addDays(mondayOf(new Date()), 6));
+        const posesSemaine = dossiers.filter((d) => d.pose.date && d.pose.date >= week0 && d.pose.date <= week1).length;
+        const dossiersEnCours = (orders ?? []).filter((o) => o.status === "signe").filter((o) => !computeProgress(o, dossiers.find((d) => d.orderId === o.id) ?? emptyDossier(o.id)).complete).length;
+        const savOuverts = savs.filter((x) => x.statut !== "resolu");
+        const urgents = savOuverts.filter((x) => x.urgence === "urgente").length;
+        const tiles = [
+          { href: "/sav", icon: LifeBuoy, label: "SAV en cours", value: String(savOuverts.length), sub: urgents ? `${urgents} urgent${urgents > 1 ? "s" : ""}` : "aucun urgent", warn: urgents > 0 },
+          { href: "/semaine", icon: CalendarDays, label: "Poses cette semaine", value: String(posesSemaine), sub: "voir l'agenda", warn: false },
+          { href: "/dossiers", icon: FolderKanban, label: "Dossiers en cours", value: String(dossiersEnCours), sub: "du bon signé au solde", warn: false },
+        ];
+        return (
+          <div className="grid sm:grid-cols-3 gap-3">
+            {tiles.map((t) => (
+              <Link key={t.label} href={t.href}>
+                <Card className="p-4 flex items-center gap-3 hover:border-brand-blue/40 transition">
+                  <span className={`size-10 rounded-[12px] grid place-items-center ${t.warn ? "bg-red-50 text-red-600" : "bg-brand-blue-soft text-brand-blue-dark"}`}>
+                    <t.icon className="size-5" />
+                  </span>
+                  <div className="flex-1">
+                    <div className="text-[10px] uppercase tracking-[0.14em] font-bold text-muted">{t.label}</div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="num text-[22px] font-semibold">{t.value}</span>
+                      <span className={`text-xs ${t.warn ? "text-red-600 font-semibold" : "text-muted"}`}>{t.sub}</span>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="grid lg:grid-cols-5 gap-4">
         <Card className="p-4 lg:col-span-3">

@@ -1,4 +1,7 @@
-import type { AppSettings, Order, OrderFilter, Profile } from "../types";
+import type { AppSettings, DossierSuivi, Order, OrderFilter, Profile, Sav, StoredFile } from "../types";
+import { compressImage } from "../image";
+import { normalizeDossier } from "../dossier";
+import { uid } from "../format";
 import { normalizeSettings } from "../settings";
 import { normalizeOrder } from "./normalize";
 import { computeTotals } from "../pricing";
@@ -164,5 +167,83 @@ export class SupabaseStore implements DataStore {
     const { error } = await getSupabase().from("settings").upsert({ id: "default", value }, { onConflict: "id" });
     if (error) throw error;
     return value;
+  }
+
+  // ----------------------------------------------------------- Dossiers
+  async listDossiers() {
+    const { data, error } = await getSupabase().from("dossiers").select("order_id, data");
+    if (error) throw error;
+    return (data as { order_id: string; data: Partial<DossierSuivi> }[]).map((r) => normalizeDossier(r.data, r.order_id));
+  }
+
+  async getDossier(orderId: string) {
+    const { data, error } = await getSupabase().from("dossiers").select("data").eq("order_id", orderId).maybeSingle();
+    if (error) throw error;
+    return normalizeDossier((data?.data as Partial<DossierSuivi>) ?? null, orderId);
+  }
+
+  async saveDossier(dossier: DossierSuivi) {
+    const session = await this.getSession();
+    const saved = { ...dossier, updatedAt: new Date().toISOString(), updatedBy: session?.fullName };
+    const { error } = await getSupabase().from("dossiers").upsert({ order_id: dossier.orderId, data: saved }, { onConflict: "order_id" });
+    if (error) throw error;
+    return saved;
+  }
+
+  // ------------------------------------------------------------ Fichiers
+  async uploadFile(scope: string, file: File): Promise<StoredFile> {
+    const blob = await compressImage(file);
+    const id = uid();
+    const path = `${scope}/${id}.jpg`;
+    const { error } = await getSupabase().storage.from("dossiers").upload(path, blob, { contentType: blob.type || "image/jpeg", upsert: false });
+    if (error) throw error;
+    return { id, name: file.name || "photo.jpg", addedAt: new Date().toISOString(), path };
+  }
+
+  async getFileUrl(file: StoredFile) {
+    if (file.dataUrl) return file.dataUrl;
+    if (!file.path) return "";
+    const { data, error } = await getSupabase().storage.from("dossiers").createSignedUrl(file.path, 3600);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  async deleteFile(file: StoredFile) {
+    if (!file.path) return;
+    const { error } = await getSupabase().storage.from("dossiers").remove([file.path]);
+    if (error) throw error;
+  }
+
+  // ----------------------------------------------------------------- SAV
+  async listSav() {
+    const { data, error } = await getSupabase().from("sav").select("data").order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data as { data: Sav }[]).map((r) => r.data);
+  }
+
+  async getSav(id: string) {
+    const { data, error } = await getSupabase().from("sav").select("data").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return data ? (data.data as Sav) : null;
+  }
+
+  async saveSav(sav: Sav) {
+    const row = {
+      id: sav.id,
+      statut: sav.statut,
+      urgence: sav.urgence,
+      order_id: sav.orderId ?? null,
+      commercial_id: sav.commercialId ?? null,
+      declared_by: sav.declaredById,
+      date_prevue: sav.datePrevue || null,
+      data: sav,
+      // Le numéro est attribué par la base à la création.
+      ...(sav.numero ? { numero: sav.numero } : {}),
+    };
+    const { data, error } = await getSupabase().from("sav").upsert(row, { onConflict: "id" }).select("numero, created_at, updated_at").single();
+    if (error) throw error;
+    const saved: Sav = { ...sav, numero: data.numero, createdAt: data.created_at, updatedAt: data.updated_at };
+    await getSupabase().from("sav").update({ data: saved }).eq("id", sav.id);
+    return saved;
   }
 }

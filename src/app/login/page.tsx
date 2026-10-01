@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import { getStore } from "@/lib/data";
+import { homePath } from "@/lib/permissions";
 import { Button, Field, Initials, Input } from "@/components/ui";
 import type { Profile } from "@/lib/types";
 
@@ -20,7 +21,7 @@ function LoginInner() {
 
   const go = (p: Profile) => {
     const next = params.get("next");
-    router.replace(next && next !== "/" ? next : p.role === "directeur" ? "/tableau-de-bord" : "/commandes");
+    router.replace(next && next !== "/" ? next : homePath(p.role));
   };
 
   React.useEffect(() => {
@@ -100,10 +101,10 @@ function LoginInner() {
                   whileTap={{ scale: 0.985 }}
                   className="group w-full flex items-center gap-3.5 rounded-[16px] border border-line bg-panel p-3.5 text-left shadow-[var(--shadow-ambient)] hover:border-brand-blue/40 transition-colors"
                 >
-                  <Initials name={p.fullName} tone={p.role === "directeur" ? "night" : "blue"} className="size-11 text-[13px]" />
+                  <Initials name={p.fullName} tone={p.role === "directeur" ? "night" : p.role === "secretaire" ? "orange" : "blue"} className="size-11 text-[13px]" />
                   <span className="flex-1 min-w-0">
                     <span className="block font-semibold text-ink">{p.fullName}</span>
-                    <span className="block text-xs text-muted">{p.role === "directeur" ? "Direction · tableau de bord" : "Commercial"}</span>
+                    <span className="block text-xs text-muted">{p.role === "directeur" ? "Direction · tableau de bord" : p.role === "secretaire" ? "Secrétariat · suivi des dossiers" : "Commercial"}</span>
                   </span>
                   <ArrowRight className="size-4 text-muted group-hover:text-brand-blue group-hover:translate-x-0.5 transition" />
                 </motion.button>

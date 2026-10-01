@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { ArrowUpRight, Plus, Search } from "lucide-react";
 import { getStore } from "@/lib/data";
+import { isStaff } from "@/lib/permissions";
 import { useAuth } from "@/components/auth-provider";
 import type { Order, OrderStatus } from "@/lib/types";
 import { computeTotals } from "@/lib/pricing";
@@ -46,7 +47,7 @@ export default function OrdersPage() {
       <Reveal>
         <div className="flex items-end justify-between gap-3 mb-6">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{user.role === "directeur" ? "Tous les commerciaux" : "Vos bons"}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{isStaff(user.role) ? "Tous les commerciaux" : "Vos bons"}</p>
             <h1 className="font-display text-[28px] sm:text-[32px] font-semibold text-ink leading-tight mt-1">Bons de commande</h1>
             {orders && orders.length > 0 && (
               <p className="text-sm text-muted mt-1">
@@ -118,7 +119,7 @@ export default function OrdersPage() {
                         </div>
                         <div className="text-[13px] text-muted mt-1 truncate">
                           <span className="font-mono text-ink-2">{o.numero}</span> · {o.customer.ville || "—"} · {dateFr(o.signedAt || o.createdAt)}
-                          {user.role === "directeur" && ` · ${o.commercialName}`}
+                          {isStaff(user.role) && ` · ${o.commercialName}`}
                         </div>
                         <div className="text-xs text-muted/80 mt-1 truncate">{o.lines.map((l) => `${l.quantity > 1 ? `${l.quantity}× ` : ""}${l.label}`).join(", ")}</div>
                       </div>

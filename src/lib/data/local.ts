@@ -1,4 +1,7 @@
-import type { AppSettings, Order, OrderFilter, Profile } from "../types";
+import type { AppSettings, DossierSuivi, Order, OrderFilter, Profile, Sav, StoredFile } from "../types";
+import { blobToDataUrl, compressImage } from "../image";
+import { normalizeDossier } from "../dossier";
+import { uid } from "../format";
 import { normalizeSettings } from "../settings";
 import { COMPANY } from "../company";
 import { normalizeOrder } from "./normalize";
@@ -8,9 +11,13 @@ const KEY_ORDERS = "ec.orders.v1";
 const KEY_SESSION = "ec.session.v1";
 const KEY_SEQ = "ec.seq.v1";
 const KEY_SETTINGS = "ec.settings.v1";
+const KEY_DOSSIERS = "ec.dossiers.v1";
+const KEY_FILES = "ec.files.v1";
+const KEY_SAV = "ec.sav.v1";
 
 const DEMO_ACCOUNTS: Profile[] = [
   { id: "u-dir", email: "direction@energiesconcept.fr", fullName: "Direction Énergies Concept", role: "directeur", active: true },
+  { id: "u-sec", email: "secretariat@energiesconcept.fr", fullName: "Secrétariat Énergies Concept", role: "secretaire", active: true },
   { id: "u-com1", email: "julien@energiesconcept.fr", fullName: "Julien Martin", role: "commercial", phone: "06 12 34 56 78", active: true },
   { id: "u-com2", email: "sophie@energiesconcept.fr", fullName: "Sophie Durand", role: "commercial", phone: "06 98 76 54 32", active: true },
 ];
@@ -29,7 +36,7 @@ const write = (key: string, value: unknown) => {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* quota / private mode */
+    throw new Error("Stockage local plein : supprimez des photos ou passez en mode équipe (Supabase).");
   }
 };
 
@@ -115,6 +122,86 @@ export class LocalStore implements DataStore {
     const session = await this.getSession();
     const saved = normalizeSettings({ ...settings, updatedAt: new Date().toISOString(), updatedBy: session?.fullName });
     write(KEY_SETTINGS, saved);
+    return saved;
+  }
+
+  // ----------------------------------------------------------- Dossiers
+  private async visibleOrderIds() {
+    return new Set((await this.listOrders()).map((o) => o.id));
+  }
+
+  async listDossiers() {
+    const ids = await this.visibleOrderIds();
+    const all = read<Record<string, DossierSuivi>>(KEY_DOSSIERS, {});
+    return Object.entries(all)
+      .filter(([id]) => ids.has(id))
+      .map(([id, d]) => normalizeDossier(d, id));
+  }
+
+  async getDossier(orderId: string) {
+    return normalizeDossier(read<Record<string, DossierSuivi>>(KEY_DOSSIERS, {})[orderId], orderId);
+  }
+
+  async saveDossier(dossier: DossierSuivi) {
+    const session = await this.getSession();
+    const all = read<Record<string, DossierSuivi>>(KEY_DOSSIERS, {});
+    const saved = { ...dossier, updatedAt: new Date().toISOString(), updatedBy: session?.fullName };
+    all[dossier.orderId] = saved;
+    write(KEY_DOSSIERS, all);
+    return saved;
+  }
+
+  // ------------------------------------------------------------ Fichiers
+  async uploadFile(scope: string, file: File): Promise<StoredFile> {
+    void scope;
+    const blob = await compressImage(file);
+    const dataUrl = await blobToDataUrl(blob);
+    const id = uid();
+    const files = read<Record<string, string>>(KEY_FILES, {});
+    files[id] = dataUrl;
+    write(KEY_FILES, files);
+    return { id, name: file.name || "photo.jpg", addedAt: new Date().toISOString(), path: id };
+  }
+
+  async getFileUrl(file: StoredFile) {
+    return file.dataUrl ?? read<Record<string, string>>(KEY_FILES, {})[file.path ?? file.id] ?? "";
+  }
+
+  async deleteFile(file: StoredFile) {
+    const files = read<Record<string, string>>(KEY_FILES, {});
+    delete files[file.path ?? file.id];
+    write(KEY_FILES, files);
+  }
+
+  // ----------------------------------------------------------------- SAV
+  async listSav() {
+    const session = await this.getSession();
+    const all = read<Sav[]>(KEY_SAV, []);
+    const scoped = session?.role === "commercial" ? all.filter((s) => s.declaredById === session.id || s.commercialId === session.id) : all;
+    return scoped.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async getSav(id: string) {
+    return read<Sav[]>(KEY_SAV, []).find((s) => s.id === id) ?? null;
+  }
+
+  async saveSav(sav: Sav) {
+    const all = read<Sav[]>(KEY_SAV, []);
+    const idx = all.findIndex((s) => s.id === sav.id);
+    const now = new Date().toISOString();
+    let saved: Sav = { ...sav, updatedAt: now };
+    if (idx === -1) {
+      const year = new Date().getFullYear();
+      const seq = read<Record<string, number>>(KEY_SEQ, {});
+      const key = `sav-${year}`;
+      seq[key] = (seq[key] ?? 0) + 1;
+      write(KEY_SEQ, seq);
+      saved = { ...saved, numero: `SAV-${year}-${String(seq[key]).padStart(4, "0")}`, createdAt: sav.createdAt || now };
+      all.push(saved);
+    } else {
+      all[idx] = saved;
+    }
+    write(KEY_SAV, all);
     return saved;
   }
 }

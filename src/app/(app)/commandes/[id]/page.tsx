@@ -6,7 +6,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Ban, CheckCircle2, ExternalLink, FileDown, Pencil, Share2, Trash2 } from "lucide-react";
 import { getStore } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
-import type { Order } from "@/lib/types";
+import type { DossierSuivi, Order } from "@/lib/types";
+import { computeProgress, emptyDossier } from "@/lib/dossier";
+import { ProgressBar, StepChips } from "@/components/dossier-ui";
 import { STATUS_LABEL, customerName, dateFr } from "@/lib/format";
 import { downloadOrderPdf, openOrderPdf, shareOrderPdf } from "@/lib/pdf";
 import { OrderSummary } from "@/components/order-summary";
@@ -20,12 +22,18 @@ function OrderDetailInner() {
   const params = useSearchParams();
   const { user } = useAuth();
   const [order, setOrder] = React.useState<Order | null | undefined>(undefined);
+  const [dossier, setDossier] = React.useState<DossierSuivi | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [confirm, setConfirm] = React.useState<"annuler" | "supprimer" | null>(null);
   const justSigned = params.get("signed") === "1";
 
   React.useEffect(() => {
-    getStore().getOrder(id).then(setOrder);
+    getStore()
+      .getOrder(id)
+      .then((o) => {
+        setOrder(o);
+        if (o?.status === "signe") getStore().getDossier(o.id).then(setDossier).catch(() => setDossier(emptyDossier(o.id)));
+      });
   }, [id]);
 
   if (order === undefined) return <Spinner />;
@@ -56,9 +64,11 @@ function OrderDetailInner() {
     });
 
   const c = order.customer;
-  const canEdit = order.status === "brouillon";
-  const canCancel = order.status !== "annule" && (user.role === "directeur" || order.status === "brouillon");
-  const canDelete = order.status === "brouillon";
+  const canWrite = user.role !== "secretaire";
+  const canEdit = canWrite && order.status === "brouillon";
+  const canCancel = canWrite && order.status !== "annule" && (user.role === "directeur" || order.status === "brouillon");
+  const canDelete = canWrite && order.status === "brouillon";
+  const progress = dossier ? computeProgress(order, dossier) : null;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -177,6 +187,21 @@ function OrderDetailInner() {
           )}
         </Card>
       </div>
+
+      {progress && (
+        <Card className="p-4 sm:p-5 mb-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="font-display font-semibold text-[17px]">Suivi du dossier</h2>
+            <Link href={`/dossiers/${order.id}`} className="text-sm font-semibold text-brand-blue">
+              Ouvrir le dossier →
+            </Link>
+          </div>
+          <ProgressBar progress={progress} />
+          <div className="mt-3">
+            <StepChips progress={progress} />
+          </div>
+        </Card>
+      )}
 
       <OrderSummary order={order} />
 

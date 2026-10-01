@@ -1,13 +1,15 @@
 "use client";
 
-import type { AppSettings, Financing, Order, PaymentSchedule } from "@/lib/types";
+import type { AppSettings, Financing, InteretModalite, Order, OrderLine, PaymentSchedule } from "@/lib/types";
 import { FINANCING_ORGANISMS, VAT_RATES, productById } from "@/lib/catalog";
-import { computeTotals, paymentTable, round2, ttcToHT } from "@/lib/pricing";
+import { lineParts, computeTotals, paymentTable, poseRateOf, round2, ttcToHT } from "@/lib/pricing";
+import { ratesFor } from "@/lib/settings";
 import { InfoTip } from "@/components/info-tip";
-import { attrsText } from "./step-products";
 import { eur } from "@/lib/format";
-import { Field, Input, SectionTitle, SegmentedControl, Select, Textarea, Toggle, cx } from "@/components/ui";
+import { Field, Input, SectionTitle, Segmented, Select, Textarea, Toggle, cx } from "@/components/ui";
 import { NumberInput } from "@/components/number-input";
+import { attrsText } from "./step-products";
+import type { PaymentErrors } from "./model";
 
 const SCHEDULE_ROWS: { key: keyof PaymentSchedule; label: string; hint: string }[] = [
   { key: "commande", label: "À la commande", hint: "Aucun encaissement avant 7 jours (vente à domicile)" },
@@ -16,14 +18,27 @@ const SCHEDULE_ROWS: { key: keyof PaymentSchedule; label: string; hint: string }
   { key: "installation", label: "À l'installation", hint: "Solde en fin de chantier" },
 ];
 
-export function StepPricing({ order, onChange, settings }: { order: Order; onChange: (patch: Partial<Order>) => void; settings: AppSettings }) {
+export function StepPricing({
+  order,
+  onChange,
+  settings,
+  errors,
+}: {
+  order: Order;
+  onChange: (patch: Partial<Order>) => void;
+  settings: AppSettings;
+  errors: PaymentErrors;
+}) {
   const t = computeTotals(order);
+  const poseRate = poseRateOf(order);
   const f = order.financing;
   const setF = (patch: Partial<Financing>) => onChange({ financing: { ...f, ...patch } });
   const setSchedule = (key: keyof PaymentSchedule, v: number | undefined) => setF({ echeancier: { ...f.echeancier, [key]: v ?? 0 } });
-  const setLine = (id: string, patch: { quantity?: number; unitPriceTTC?: number; vatRate?: number }) =>
+  const setLine = (id: string, patch: Partial<Pick<OrderLine, "quantity" | "unitPriceTTC" | "vatRate" | "poseVatRate">>) =>
     onChange({ lines: order.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
-  const tip = (l: Order["lines"][number]) => {
+  const setRates = (organisme: string, modalite: InteretModalite) => setF({ organisme, modaliteInteret: modalite, ...ratesFor(settings, organisme, modalite) });
+
+  const tip = (l: OrderLine) => {
     const p = l.productId ? productById(l.productId) : undefined;
     if (!p?.priceTTC) return null;
     return (
@@ -31,10 +46,11 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
         <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-white/60">Prix conseillé</span>
         <span className="block num text-[16px] font-semibold mt-0.5">{eur(p.priceTTC)} TTC</span>
         <span className="block text-white/70">soit {eur(ttcToHT(p.priceTTC, l.vatRate))} HT</span>
+        {p.priceNote && <span className="block text-white/60 text-[11.5px] mt-1.5">{p.priceNote}</span>}
       </InfoTip>
     );
   };
-  const hasReducedVat = order.lines.some((l) => l.vatRate < 20);
+  const hasReducedVat = order.lines.some((l) => l.vatRate < 20 || (l.poseIncluse && l.poseVatRate < 20));
   const vatKeys = Object.keys(t.tvaParTaux).sort((a, b) => parseFloat(b) - parseFloat(a));
 
   const table = t.montantFinance > 0 ? paymentTable(t.montantFinance, f.taux || 0, f.tauxAssurance || 0, settings.dureesProposees) : [];
@@ -42,20 +58,75 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
     const others = SCHEDULE_ROWS.filter((r) => r.key !== key).reduce((s, r) => s + (f.echeancier[r.key] || 0), 0);
     setSchedule(key, Math.max(0, round2(t.totalTTC - others)));
   };
+  const showMode = f.mode === "comptant" || t.acomptes > 0;
+  const modalite = f.modaliteInteret ?? "normal";
+
+  /** Détail sous le TTC d'une ligne : matériel et installation avec HT et TVA. */
+  const detail = (l: OrderLine) => {
+    const parts = lineParts(l, poseRate);
+    const rows: { key: string; label: string; ht: number; tva: number; ttc: number; select?: boolean; rate: number }[] = [
+      { key: "mat", label: l.poseIncluse && parts.pose ? "Matériel" : "Montant", ht: parts.materiel.ht, tva: parts.materiel.tva, ttc: parts.materiel.ttc, rate: l.vatRate },
+    ];
+    if (parts.pose) rows.push({ key: "pose", label: `Installation (${poseRate} %)`, ht: parts.pose.ht, tva: parts.pose.tva, ttc: parts.pose.ttc, rate: l.poseVatRate, select: true });
+    return (
+      <div className="rounded-[12px] bg-surface px-3 py-2 text-[12.5px]">
+        <div className="hidden sm:grid grid-cols-[1fr_6.5rem_8.5rem_6.5rem] gap-x-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted pb-1">
+          <span>Détail</span>
+          <span className="text-right">HT</span>
+          <span className="text-right">TVA</span>
+          <span className="text-right">TTC</span>
+        </div>
+        {rows.map((r) => (
+          <div key={r.key} className="grid grid-cols-2 sm:grid-cols-[1fr_6.5rem_8.5rem_6.5rem] gap-x-3 gap-y-0.5 items-center py-0.5">
+            <span className="font-medium text-ink-2 col-span-2 sm:col-span-1">{r.label}</span>
+            <span className="sm:text-right tabular-nums text-muted">
+              <span className="sm:hidden text-[10px] uppercase tracking-wider mr-1">HT</span>
+              {eur(r.ht)}
+            </span>
+            <span className="sm:text-right tabular-nums text-muted flex items-center sm:justify-end gap-1.5 justify-end">
+              {r.select ? (
+                <select
+                  value={r.rate}
+                  onChange={(e) => setLine(l.id, { poseVatRate: parseFloat(e.target.value) })}
+                  className="h-7 rounded-md border border-line-strong bg-panel text-[12px] px-1"
+                  aria-label="TVA installation"
+                >
+                  {VAT_RATES.map((v) => (
+                    <option key={v} value={v}>
+                      {v} %
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span>{r.rate} %</span>
+              )}
+              <span>{eur(r.tva)}</span>
+            </span>
+            <span className="text-right tabular-nums font-semibold text-ink">
+              <span className="sm:hidden text-[10px] uppercase tracking-wider text-muted font-bold mr-1">TTC</span>
+              {eur(r.ttc)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8">
       {/* ------------------------------------------------------------ Tarifs */}
       <section>
-        <SectionTitle sub="Prix TTC saisis par vos soins, le « i » rappelle le prix conseillé. Le HT et la TVA sont déduits automatiquement, ligne par ligne.">Tarifs</SectionTitle>
+        <SectionTitle sub={`Le prix TTC saisi comprend l'installation (${poseRate} % du TTC, répartie automatiquement). Le « i » rappelle le prix conseillé.`}>Tarifs</SectionTitle>
 
         {/* Mobile : cartes */}
         <ul className="sm:hidden space-y-2.5">
           {order.lines.map((l) => (
-            <li key={l.id} className="rounded-[16px] border border-line bg-panel p-3.5">
-              <div className="font-medium leading-snug">{l.label}</div>
-              {attrsText(l) && <div className="text-xs text-muted">{attrsText(l)}</div>}
-              <div className="grid grid-cols-[4rem_1fr_auto] gap-2 items-end mt-2.5">
+            <li key={l.id} className="rounded-[16px] border border-line bg-panel p-3.5 space-y-2.5">
+              <div>
+                <div className="font-medium leading-snug">{l.label}</div>
+                {attrsText(l) && <div className="text-xs text-muted">{attrsText(l)}</div>}
+              </div>
+              <div className="grid grid-cols-[4rem_1fr_auto] gap-2 items-end">
                 <Field label="Qté">
                   <Input type="number" min={1} value={l.quantity} onChange={(e) => setLine(l.id, { quantity: Math.max(1, parseInt(e.target.value || "1", 10)) })} className="text-center h-10 px-1" />
                 </Field>
@@ -70,16 +141,17 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
                   <div className="num font-semibold">{eur(l.quantity * l.unitPriceTTC)}</div>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2 mt-2">
-                <span className="text-xs text-muted">soit {eur(ttcToHT(l.unitPriceTTC, l.vatRate))} HT / unité</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted">TVA du matériel</span>
                 <Select value={l.vatRate} onChange={(e) => setLine(l.id, { vatRate: parseFloat(e.target.value) })} className="h-9 w-28 text-[13px]">
                   {VAT_RATES.map((r) => (
                     <option key={r} value={r}>
-                      TVA {r} %
+                      {r} %
                     </option>
                   ))}
                 </Select>
               </div>
+              {detail(l)}
             </li>
           ))}
         </ul>
@@ -92,38 +164,35 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
                 <th className="text-left font-semibold px-4 py-2.5">Désignation</th>
                 <th className="text-center font-semibold px-2 py-2.5 w-20">Qté</th>
                 <th className="text-right font-semibold px-2 py-2.5 w-44">PU TTC</th>
-                <th className="text-right font-semibold px-3 py-2.5 w-28">PU HT</th>
-                <th className="text-center font-semibold px-2 py-2.5 w-28">TVA</th>
+                <th className="text-center font-semibold px-2 py-2.5 w-28">TVA matériel</th>
                 <th className="text-right font-semibold px-4 py-2.5 w-32">Total TTC</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {order.lines.map((l) => (
-                <tr key={l.id}>
-                  <td className="px-4 py-2.5">
-                    <div className="font-medium leading-snug">{l.label}</div>
-                    {attrsText(l) && <div className="text-xs text-muted">{attrsText(l)}</div>}
-                  </td>
-                  <td className="px-2 py-2">
-                    <Input type="number" min={1} value={l.quantity} onChange={(e) => setLine(l.id, { quantity: Math.max(1, parseInt(e.target.value || "1", 10)) })} className="text-center h-10 px-1" />
-                  </td>
-                  <td className="px-2 py-2">
-                    <div className="flex items-center gap-1">
-                      <NumberInput value={l.unitPriceTTC} onChange={(v) => setLine(l.id, { unitPriceTTC: v ?? 0 })} suffix="€" className="text-right h-10" />
-                      {tip(l)}
+                <tr key={l.id} className="align-top">
+                  <td className="px-4 py-3" colSpan={5}>
+                    <div className="grid grid-cols-[1fr_5rem_11rem_7rem_8rem] items-center gap-x-2">
+                      <div>
+                        <div className="font-medium leading-snug">{l.label}</div>
+                        {attrsText(l) && <div className="text-xs text-muted">{attrsText(l)}</div>}
+                      </div>
+                      <Input type="number" min={1} value={l.quantity} onChange={(e) => setLine(l.id, { quantity: Math.max(1, parseInt(e.target.value || "1", 10)) })} className="text-center h-10 px-1" />
+                      <div className="flex items-center gap-1">
+                        <NumberInput value={l.unitPriceTTC} onChange={(v) => setLine(l.id, { unitPriceTTC: v ?? 0 })} suffix="€" className="text-right h-10" />
+                        {tip(l)}
+                      </div>
+                      <Select value={l.vatRate} onChange={(e) => setLine(l.id, { vatRate: parseFloat(e.target.value) })} className="h-10 text-[13px] px-2 pr-7">
+                        {VAT_RATES.map((r) => (
+                          <option key={r} value={r}>
+                            {r} %
+                          </option>
+                        ))}
+                      </Select>
+                      <div className="text-right num font-semibold">{eur(l.quantity * l.unitPriceTTC)}</div>
                     </div>
+                    <div className="mt-2">{detail(l)}</div>
                   </td>
-                  <td className="text-right px-3 py-2.5 text-muted tabular-nums">{eur(ttcToHT(l.unitPriceTTC, l.vatRate))}</td>
-                  <td className="px-2 py-2">
-                    <Select value={l.vatRate} onChange={(e) => setLine(l.id, { vatRate: parseFloat(e.target.value) })} className="h-10 text-[13px] px-2 pr-7">
-                      {VAT_RATES.map((r) => (
-                        <option key={r} value={r}>
-                          {r} %
-                        </option>
-                      ))}
-                    </Select>
-                  </td>
-                  <td className="text-right px-4 py-2.5 num font-semibold">{eur(l.quantity * l.unitPriceTTC)}</td>
                 </tr>
               ))}
             </tbody>
@@ -169,6 +238,11 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
           <Stat label="Remise TTC" value={t.remiseTTC ? `- ${eur(t.remiseTTC)}` : "—"} />
           <Stat label="Total TTC" value={eur(t.totalTTC)} accent />
         </div>
+        {t.pose.ttc > 0 && (
+          <p className="text-xs text-muted mt-2 px-1">
+            Dont installation : <b className="text-ink">{eur(t.pose.ttc)} TTC</b> · {eur(t.pose.ht)} HT · TVA {eur(t.pose.tva)}. Matériel : {eur(round2(t.totalTTC - t.pose.ttc))} TTC.
+          </p>
+        )}
 
         {hasReducedVat && (
           <label className="mt-4 flex items-start gap-3 rounded-[16px] border border-line bg-surface-2 p-4 text-sm cursor-pointer has-[:checked]:border-brand-green has-[:checked]:bg-brand-green-soft/50 transition-colors">
@@ -181,11 +255,15 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
       </section>
 
       {/* -------------------------------------------------------- Paiement */}
-      <section>
-        <SectionTitle sub="Comptant ou financement. Le pavé crédit n'apparaît qu'en cas de financement.">Paiement</SectionTitle>
-        <SegmentedControl
+      <section id="paiement">
+        <SectionTitle sub="Comptant ou financement. L'échéancier et le mode de règlement sont obligatoires.">Paiement</SectionTitle>
+        <Segmented
           value={f.mode}
-          onChange={(mode) => setF({ mode })}
+          onChange={(mode) => {
+            // Passer au crédit avec un échéancier qui couvre déjà tout le montant laisserait 0 € à financer : on repart à zéro.
+            if (mode === "credit" && t.acomptes >= t.totalTTC && t.totalTTC > 0) setF({ mode, echeancier: { commande: 0, visiteTechnique: 0, livraison: 0, installation: 0 } });
+            else setF({ mode });
+          }}
           options={[
             { value: "comptant", label: "Paiement comptant" },
             { value: "credit", label: "Financement" },
@@ -193,15 +271,39 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
           className="max-w-md"
         />
 
-        <div className="mt-4 rounded-[16px] border border-line bg-panel p-4">
+        {showMode && (
+          <div className="mt-4 rounded-[16px] border border-line bg-panel p-4">
+            <Field label="Mode de règlement" required error={errors.mode}>
+              <Segmented
+                value={(f.acompteMode ?? "") as "cheque" | "virement" | ""}
+                onChange={(v) => v && setF({ acompteMode: v })}
+                options={[
+                  { value: "cheque", label: "Chèque" },
+                  { value: "virement", label: "Virement" },
+                ]}
+                className="max-w-xs"
+              />
+            </Field>
+            {f.acompteMode === "cheque" && (f.echeancier.commande || 0) > 0 && (
+              <div className="mt-3">
+                <Toggle checked={Boolean(f.chequeRecupere)} onChange={(v) => setF({ chequeRecupere: v })} label={f.chequeRecupere ? "Chèque d'acompte récupéré" : "Chèque d'acompte non récupéré"} />
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={cx("mt-4 rounded-[16px] border bg-panel p-4", errors.echeancier ? "border-red-300" : "border-line")}>
           <div className="flex items-baseline justify-between gap-3 mb-3">
             <div>
-              <div className="font-semibold">{f.mode === "comptant" ? "Échéancier de règlement" : "Apport (acomptes versés hors crédit)"}</div>
-              <div className="text-xs text-muted">{f.mode === "comptant" ? "Répartissez le total TTC. Laissez à 0 les étapes sans règlement." : "Le plus souvent 0 : la totalité est financée."}</div>
+              <div className="font-semibold">
+                {f.mode === "comptant" ? "Échéancier de règlement" : "Apport (acomptes versés hors crédit)"}
+                {f.mode === "comptant" && <span className="text-brand-orange"> *</span>}
+              </div>
+              <div className="text-xs text-muted">{f.mode === "comptant" ? "Répartissez la totalité du total TTC entre les étapes." : "Le plus souvent 0 : la totalité est financée."}</div>
             </div>
             <div className="text-right shrink-0">
               <div className="text-[10px] uppercase tracking-[0.12em] text-muted font-bold">{f.mode === "comptant" ? "Reste à répartir" : "Apport total"}</div>
-              <div className={cx("num font-semibold", f.mode === "comptant" && t.resteARepartir !== 0 ? "text-brand-orange-dark" : "text-ink")}>
+              <div className={cx("num font-semibold", f.mode === "comptant" && t.resteARepartir !== 0 ? "text-brand-orange-dark" : "text-brand-green-dark")}>
                 {eur(f.mode === "comptant" ? t.resteARepartir : t.acomptes)}
               </div>
             </div>
@@ -225,21 +327,7 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
               </div>
             ))}
           </div>
-          {(f.echeancier.commande || 0) > 0 && (
-            <div className="grid sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-line">
-              <Field label="Règlement de l'acompte à la commande">
-                <Select value={f.acompteMode ?? "cheque"} onChange={(e) => setF({ acompteMode: e.target.value as Financing["acompteMode"] })}>
-                  <option value="cheque">Chèque</option>
-                  <option value="virement">Virement</option>
-                  <option value="cb">Carte bancaire</option>
-                  <option value="especes">Espèces</option>
-                </Select>
-              </Field>
-              <Field label="Chèque d'acompte">
-                <Toggle checked={Boolean(f.chequeRecupere)} onChange={(v) => setF({ chequeRecupere: v })} label={f.chequeRecupere ? "Récupéré par le commercial" : "Non récupéré"} />
-              </Field>
-            </div>
-          )}
+          {errors.echeancier && <p className="mt-3 text-sm font-medium text-red-600">{errors.echeancier}</p>}
         </div>
 
         {f.mode === "credit" && (
@@ -248,8 +336,7 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
               <div>
                 <div className="font-semibold">Crédit {f.organisme || settings.organismeDefaut}</div>
                 <div className="text-xs text-muted">
-                  Taux nominal <b className="text-ink">{(f.taux ?? 0).toString().replace(".", ",")} %</b> · TAEG{" "}
-                  <b className="text-ink">{(f.taeg ?? 0).toString().replace(".", ",")} %</b> · assurance{" "}
+                  Taux nominal <b className="text-ink">{(f.taux ?? 0).toString().replace(".", ",")} %</b> · TAEG <b className="text-ink">{(f.taeg ?? 0).toString().replace(".", ",")} %</b> · assurance DIM{" "}
                   <b className="text-ink">{(f.tauxAssurance ?? 0).toString().replace(".", ",")} %</b> / an · fixés par la direction
                 </div>
               </div>
@@ -260,21 +347,31 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
             </div>
 
             <div className="grid sm:grid-cols-3 gap-3">
-              <Field label="Organisme">
-                <Select value={f.organisme ?? ""} onChange={(e) => setF({ organisme: e.target.value })}>
+              <Field label="Organisme" required error={errors.organisme}>
+                <Select value={f.organisme ?? ""} onChange={(e) => setRates(e.target.value, modalite)}>
                   {FINANCING_ORGANISMS.map((o) => (
                     <option key={o}>{o}</option>
                   ))}
                 </Select>
               </Field>
-              <Field label="Assurance emprunteur">
-                <Toggle checked={Boolean(f.avecAssurance)} onChange={(v) => setF({ avecAssurance: v })} label={f.avecAssurance ? "Avec assurance" : "Sans assurance"} />
+              <Field label="Intérêts" className="sm:col-span-2">
+                <Segmented
+                  value={modalite}
+                  onChange={(m) => setRates(f.organisme ?? settings.organismeDefaut, m)}
+                  options={[
+                    { value: "normal", label: "Normal" },
+                    { value: "compense", label: "Compensé" },
+                    { value: "gratuit", label: "Gratuit" },
+                  ]}
+                />
+              </Field>
+              <Field label="Assurance DIM" hint="Décès, invalidité, maladie">
+                <Toggle checked={Boolean(f.avecAssurance)} onChange={(v) => setF({ avecAssurance: v })} label={f.avecAssurance ? "Avec assurance DIM" : "Sans assurance"} />
               </Field>
               <Field label="Report de la 1re échéance">
                 <Select value={f.reportJours ?? 0} onChange={(e) => setF({ reportJours: parseInt(e.target.value, 10) || undefined })}>
                   <option value={0}>Sans report</option>
-                  <option value={90}>90 jours</option>
-                  <option value={180}>180 jours</option>
+                  <option value={180}>180 jours (6 mois)</option>
                 </Select>
               </Field>
               <Field label="Nombre d'emprunteurs">
@@ -286,21 +383,30 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
               <Field label="Date de naissance (emprunteur 1)">
                 <Input type="date" value={f.dateNaissance1 ?? ""} onChange={(e) => setF({ dateNaissance1: e.target.value })} />
               </Field>
-              {(f.nbEmprunteurs ?? 1) === 2 ? (
+              {(f.nbEmprunteurs ?? 1) === 2 && (
                 <Field label="Date de naissance (emprunteur 2)">
                   <Input type="date" value={f.dateNaissance2 ?? ""} onChange={(e) => setF({ dateNaissance2: e.target.value })} />
                 </Field>
-              ) : (
-                <Field label="Situation">
-                  <Toggle checked={f.enActivite !== false} onChange={(v) => setF({ enActivite: v })} label={f.enActivite !== false ? "En activité" : "Sans activité / retraité"} />
-                </Field>
               )}
+              <Field label="Situation" className="sm:col-span-2">
+                <Segmented
+                  value={f.situation ?? "activite"}
+                  onChange={(v) => setF({ situation: v })}
+                  options={[
+                    { value: "activite", label: "En activité" },
+                    { value: "retraite", label: "Retraité" },
+                  ]}
+                  className="max-w-xs"
+                />
+              </Field>
             </div>
 
             {/* Tableau des durées */}
             {table.length > 0 ? (
               <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted mb-2">Choisir la durée · mensualité {f.avecAssurance ? "avec" : "sans"} assurance</div>
+                <div className={cx("text-[11px] font-bold uppercase tracking-[0.12em] mb-2", errors.duree ? "text-red-600" : "text-muted")}>
+                  Choisir la durée * · mensualité {f.avecAssurance ? "avec" : "sans"} assurance DIM
+                </div>
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
                   {table.map((row) => {
                     const active = f.dureeMois === row.mois;
@@ -324,14 +430,14 @@ export function StepPricing({ order, onChange, settings }: { order: Order; onCha
                     );
                   })}
                 </div>
+                {errors.duree && <p className="mt-2 text-sm font-medium text-red-600">{errors.duree}</p>}
                 {t.mensualite && f.dureeMois ? (
                   <p className="text-sm mt-3">
                     <b>{f.dureeMois} × {eur(t.mensualite)}</b> = {eur(t.coutTotalCredit)} au total
-                    {t.assuranceMensuelle ? ` (dont assurance ${eur(t.assuranceMensuelle)} / mois)` : ""} · sous réserve d&apos;acceptation du dossier par l&apos;organisme.
+                    {t.assuranceMensuelle ? ` (dont assurance DIM ${eur(t.assuranceMensuelle)} / mois)` : ""}
+                    {f.reportJours ? ` · report ${f.reportJours} jours` : ""} · sous réserve d&apos;acceptation du dossier par l&apos;organisme.
                   </p>
-                ) : (
-                  <p className="text-sm mt-3 text-brand-orange-dark font-medium">Sélectionnez une durée pour fixer la mensualité.</p>
-                )}
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted">Ajoutez des produits pour calculer les mensualités.</p>

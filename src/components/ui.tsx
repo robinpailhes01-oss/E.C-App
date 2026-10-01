@@ -201,6 +201,8 @@ export function SegmentedControl<T extends string>({
   );
 }
 
+export const Segmented = SegmentedControl;
+
 export function EmptyState({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
     <div className="text-center py-14 px-6">

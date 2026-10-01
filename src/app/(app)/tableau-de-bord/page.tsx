@@ -10,9 +10,12 @@ import type { Order, Profile, ProductCategory } from "@/lib/types";
 import { computeTotals } from "@/lib/pricing";
 import { CATEGORIES, categoryColor, categoryShort } from "@/lib/catalog";
 import { STATUS_LABEL, customerName, dateFr, eur0, monthKey, monthLabel } from "@/lib/format";
-import { Badge, Card, EmptyState, Reveal, SegmentedControl, Select, Spinner, statusTone } from "@/components/ui";
+import { Badge, Card, EmptyState, Field, Input, Reveal, SegmentedControl, Select, Spinner, statusTone } from "@/components/ui";
+import { FinancingRates } from "@/components/financing-rates";
 
-type Period = "mois" | "3mois" | "12mois" | "tout";
+type Period = "mois" | "3mois" | "12mois" | "tout" | "perso";
+
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 const periodStart = (p: Period): string | null => {
   const d = new Date();
@@ -31,6 +34,12 @@ export default function DashboardPage() {
   const [profiles, setProfiles] = React.useState<Profile[]>([]);
   const [period, setPeriod] = React.useState<Period>("12mois");
   const [commercial, setCommercial] = React.useState("");
+  const [from, setFrom] = React.useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return isoDay(d);
+  });
+  const [to, setTo] = React.useState(() => isoDay(new Date()));
 
   React.useEffect(() => {
     if (user.role !== "directeur") {
@@ -45,8 +54,13 @@ export default function DashboardPage() {
 
   const data = React.useMemo(() => {
     if (!orders) return null;
-    const start = periodStart(period);
-    const inPeriod = orders.filter((o) => (!start || (o.signedAt || o.createdAt) >= start) && (!commercial || o.commercialId === commercial));
+    const perso = period === "perso";
+    const start = perso ? (from ? new Date(`${from}T00:00:00`).toISOString() : null) : periodStart(period);
+    const end = perso && to ? new Date(`${to}T23:59:59.999`).toISOString() : null;
+    const inPeriod = orders.filter((o) => {
+      const at = o.signedAt || o.createdAt;
+      return (!start || at >= start) && (!end || at <= end) && (!commercial || o.commercialId === commercial);
+    });
     const signed = inPeriod.filter((o) => o.status === "signe");
     const drafts = inPeriod.filter((o) => o.status === "brouillon");
     const cancelled = inPeriod.filter((o) => o.status === "annule");
@@ -59,10 +73,16 @@ export default function DashboardPage() {
     const months: Record<string, { ca: number; n: number }> = {};
     const now = new Date();
     const span = period === "mois" ? 1 : period === "3mois" ? 3 : 12;
-    if (period !== "tout") {
+    if (perso && from) {
+      const a = new Date(`${from}T00:00:00`);
+      const z = to ? new Date(`${to}T00:00:00`) : now;
+      for (let d = new Date(a.getFullYear(), a.getMonth(), 1); d <= z && Object.keys(months).length < 36; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+        months[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = { ca: 0, n: 0 };
+      }
+    } else if (period !== "tout" && !perso) {
       for (let i = span - 1; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        months[monthKey(d.toISOString())] = { ca: 0, n: 0 };
+        months[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = { ca: 0, n: 0 };
       }
     }
     signed.forEach((o, i) => {
@@ -97,14 +117,14 @@ export default function DashboardPage() {
     const financed = signed.filter((o) => o.financing.mode !== "comptant").length;
 
     return { inPeriod, signed, drafts, cancelled, caTTC, caHT, decided, byMonth, byCategory, byCommercial, financed };
-  }, [orders, period, commercial]);
+  }, [orders, period, commercial, from, to]);
 
   if (user.role !== "directeur") return null;
   if (!orders || !data) return <Spinner />;
 
   const kpis = [
     { label: "CA signé TTC", value: eur0(data.caTTC), sub: `${eur0(data.caHT)} HT` },
-    { label: "Bons signés", value: String(data.signed.length), sub: `${data.drafts.length} brouillon${data.drafts.length > 1 ? "s" : ""} · ${data.cancelled.length} annulé${data.cancelled.length > 1 ? "s" : ""}` },
+    { label: "Bons signés", value: String(data.signed.length), sub: `${data.drafts.length} en cours · ${data.cancelled.length} annulé${data.cancelled.length > 1 ? "s" : ""}` },
     { label: "Panier moyen", value: data.signed.length ? eur0(data.caTTC / data.signed.length) : "—", sub: "TTC par bon signé" },
     { label: "Taux de signature", value: data.decided ? `${Math.round((data.signed.length / data.decided) * 100)} %` : "—", sub: "signés / (signés + annulés)" },
     { label: "Financés", value: data.signed.length ? `${Math.round((data.financed / data.signed.length) * 100)} %` : "—", sub: "des bons signés avec crédit" },
@@ -137,11 +157,26 @@ export default function DashboardPage() {
               { value: "3mois", label: "3 mois" },
               { value: "12mois", label: "12 mois" },
               { value: "tout", label: "Tout" },
+              { value: "perso", label: "Dates…" },
             ]}
-            className="sm:w-80"
+            className="sm:w-[26rem]"
           />
         </div>
       </div>
+
+      {period === "perso" && (
+        <Card className="p-4 flex flex-wrap items-end gap-3">
+          <Field label="Du" className="w-44">
+            <Input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </Field>
+          <Field label="Au" className="w-44">
+            <Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </Field>
+          <p className="text-sm text-muted pb-3">
+            {data.inPeriod.length} bon{data.inPeriod.length > 1 ? "s" : ""} sur la période choisie.
+          </p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {kpis.map((k, i) => (
@@ -246,7 +281,7 @@ export default function DashboardPage() {
                 <tr>
                   <th className="text-left font-semibold px-4 py-2.5">Commercial</th>
                   <th className="text-right font-semibold px-3 py-2.5">Signés</th>
-                  <th className="text-right font-semibold px-3 py-2.5">Brouillons</th>
+                  <th className="text-right font-semibold px-3 py-2.5">En cours</th>
                   <th className="text-right font-semibold px-3 py-2.5">Annulés</th>
                   <th className="text-right font-semibold px-3 py-2.5">CA TTC</th>
                   <th className="text-right font-semibold px-4 py-2.5">Panier moyen</th>
@@ -299,6 +334,10 @@ export default function DashboardPage() {
           </ul>
         )}
       </Card>
+
+      <div id="taux" className="scroll-mt-24">
+        <FinancingRates />
+      </div>
     </div>
   );
 }

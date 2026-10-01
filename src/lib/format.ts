@@ -30,7 +30,7 @@ export const customerName = (c: { civilite?: string; nom?: string; prenom?: stri
   [c.civilite, c.prenom, c.nom].filter(Boolean).join(" ").trim() || "Client";
 
 export const STATUS_LABEL: Record<string, string> = {
-  brouillon: "Brouillon",
+  brouillon: "En cours",
   signe: "Signé",
   annule: "Annulé",
 };

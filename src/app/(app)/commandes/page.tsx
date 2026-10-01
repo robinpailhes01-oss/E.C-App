@@ -50,7 +50,7 @@ export default function OrdersPage() {
             <h1 className="font-display text-[28px] sm:text-[32px] font-semibold text-ink leading-tight mt-1">Bons de commande</h1>
             {orders && orders.length > 0 && (
               <p className="text-sm text-muted mt-1">
-                <b className="text-ink num">{counts.signe}</b> signé{counts.signe > 1 ? "s" : ""} · <b className="text-ink num">{counts.brouillon}</b> brouillon{counts.brouillon > 1 ? "s" : ""}
+                <b className="text-ink num">{counts.signe}</b> signé{counts.signe > 1 ? "s" : ""} · <b className="text-ink num">{counts.brouillon}</b> en cours
                 {counts.annule > 0 && (
                   <>
                     {" "}· <b className="text-ink num">{counts.annule}</b> annulé{counts.annule > 1 ? "s" : ""}
@@ -78,7 +78,7 @@ export default function OrdersPage() {
             onChange={setFilter}
             options={[
               { value: "tous", label: "Tous" },
-              { value: "brouillon", label: "Brouillons" },
+              { value: "brouillon", label: "En cours" },
               { value: "signe", label: "Signés" },
               { value: "annule", label: "Annulés" },
             ]}

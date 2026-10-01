@@ -1,12 +1,13 @@
 "use client";
 
 import type { Order } from "@/lib/types";
-import { computeTotals, ttcToHT } from "@/lib/pricing";
+import { computeTotals, lineParts, poseRateOf } from "@/lib/pricing";
 import { attrsText } from "./order-wizard/step-products";
 import { eur } from "@/lib/format";
 import { categoryShort } from "@/lib/catalog";
 
-const paymentLabel: Record<string, string> = { cheque: "chèque", virement: "virement", cb: "carte bancaire", especes: "espèces" };
+const paymentLabel: Record<string, string> = { cheque: "chèque", virement: "virement" };
+const modaliteLabel: Record<string, string> = { normal: "intérêts normaux", compense: "intérêts compensés", gratuit: "intérêts gratuits" };
 
 export function scheduleRows(order: Order) {
   const e = order.financing.echeancier;
@@ -22,6 +23,7 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
   const t = computeTotals(order);
   const f = order.financing;
   const rows = scheduleRows(order);
+  const poseRate = poseRateOf(order);
   return (
     <div className="space-y-4">
       <div className="rounded-[16px] border border-line bg-panel overflow-hidden">
@@ -40,10 +42,21 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
                 <td className="px-3 sm:px-4 py-2.5">
                   <div className="font-medium leading-snug">{l.label}</div>
                   <div className="text-xs text-muted">{[categoryShort(l.category), attrsText(l), l.detail].filter(Boolean).join(" · ")}</div>
-                  <div className="text-xs text-muted">
-                    {!compact && <span className="sm:hidden">PU {eur(l.unitPriceTTC)} TTC · </span>}
-                    {eur(ttcToHT(l.unitPriceTTC, l.vatRate))} HT / unité · TVA {l.vatRate} %
-                  </div>
+                  {(() => {
+                    const parts = lineParts(l, poseRate);
+                    return (
+                      <div className="mt-0.5 text-xs text-muted space-y-0.5">
+                        <div>
+                          {parts.pose ? "Matériel" : "Montant"} : {eur(parts.materiel.ttc)} TTC · {eur(parts.materiel.ht)} HT · TVA {parts.materiel.rate} % ({eur(parts.materiel.tva)})
+                        </div>
+                        {parts.pose && (
+                          <div>
+                            Installation ({parts.pose.pct} %) : {eur(parts.pose.ttc)} TTC · {eur(parts.pose.ht)} HT · TVA {parts.pose.rate} % ({eur(parts.pose.tva)})
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="text-center px-2 py-2.5">{l.quantity}</td>
                 {!compact && <td className="text-right px-3 py-2.5 tabular-nums hidden sm:table-cell">{eur(l.unitPriceTTC)}</td>}
@@ -68,10 +81,10 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
               ))}
             </ul>
           )}
-          {(f.echeancier.commande || 0) > 0 && f.acompteMode && (
+          {f.acompteMode && (
             <div className="text-muted text-xs">
-              Acompte par {paymentLabel[f.acompteMode]}
-              {f.chequeRecupere ? " · chèque récupéré" : ""}
+              Règlement par {paymentLabel[f.acompteMode]}
+              {f.acompteMode === "cheque" && (f.echeancier.commande || 0) > 0 ? (f.chequeRecupere ? " · chèque récupéré" : " · chèque non récupéré") : ""}
             </div>
           )}
           {f.mode === "comptant" && t.resteARepartir > 0 && (
@@ -84,7 +97,7 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
               </div>
               {t.mensualite && f.dureeMois ? (
                 <div>
-                  <b>{f.dureeMois} mensualités de {eur(t.mensualite)}</b> {f.avecAssurance ? "avec" : "sans"} assurance · taux {String(f.taux ?? 0).replace(".", ",")} %
+                  <b>{f.dureeMois} mensualités de {eur(t.mensualite)}</b> {f.avecAssurance ? "avec assurance DIM" : "sans assurance"} · taux {String(f.taux ?? 0).replace(".", ",")} % ({modaliteLabel[f.modaliteInteret ?? "normal"]})
                   {f.reportJours ? ` · report ${f.reportJours} jours` : ""}
                 </div>
               ) : (
@@ -116,7 +129,12 @@ export function OrderSummary({ order, compact }: { order: Order; compact?: boole
             <span className="text-[11px] font-bold uppercase tracking-[0.14em]">Total TTC</span>
             <span className="num font-semibold text-[22px]">{eur(t.totalTTC)}</span>
           </div>
-          {order.delaiInstallationMois ? <div className="text-xs text-white/60 mt-3">Délai d&apos;installation : {order.delaiInstallationMois} mois</div> : null}
+          {t.pose.ttc > 0 && (
+            <div className="text-xs text-white/60 mt-3">
+              Dont installation : {eur(t.pose.ttc)} TTC · {eur(t.pose.ht)} HT · TVA {eur(t.pose.tva)}
+            </div>
+          )}
+          {order.delaiInstallationMois ? <div className="text-xs text-white/60 mt-1">Délai d&apos;installation : {order.delaiInstallationMois} mois</div> : null}
         </div>
       </div>
     </div>

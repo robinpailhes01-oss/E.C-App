@@ -1,6 +1,13 @@
 import type { Order } from "../types";
 
-type LegacyLine = Omit<Order["lines"][number], "unitPriceTTC" | "vatRate" | "category"> & { unitPriceHT?: number; unitPriceTTC?: number; vatRate?: number; category: string };
+type LegacyLine = Omit<Order["lines"][number], "unitPriceTTC" | "vatRate" | "category" | "poseIncluse" | "poseVatRate"> & {
+  unitPriceHT?: number;
+  unitPriceTTC?: number;
+  vatRate?: number;
+  category: string;
+  poseIncluse?: boolean;
+  poseVatRate?: number;
+};
 const LEGACY_CATEGORY: Record<string, Order["lines"][number]["category"]> = {
   pv_sans_stockage: "pv",
   pv_avec_stockage: "pv",
@@ -14,9 +21,13 @@ const LEGACY_CATEGORY: Record<string, Order["lines"][number]["category"]> = {
   pv: "pv",
   ballon: "ballon",
 };
-type LegacyFinancing = Omit<Order["financing"], "mode" | "echeancier"> & {
+type LegacyFinancing = Omit<Order["financing"], "mode" | "echeancier" | "acompteMode" | "situation"> & {
   mode?: string;
   echeancier?: Order["financing"]["echeancier"];
+  acompteMode?: string;
+  situation?: string;
+  enActivite?: boolean;
+  reportMois?: number;
   acompte?: number;
   montantFinance?: number;
   mensualite?: number;
@@ -30,10 +41,11 @@ export function normalizeOrder(raw: LegacyOrder): Order {
   const lines = (raw.lines ?? []).map((l) => {
     const { unitPriceHT, ...rest } = l;
     const unitPriceTTC = l.unitPriceTTC ?? (unitPriceHT !== undefined ? Math.round(unitPriceHT * (1 + vat / 100) * 100) / 100 : 0);
-    return { ...rest, unitPriceTTC, vatRate: l.vatRate ?? vat, category: LEGACY_CATEGORY[l.category] ?? "autre" };
+    // Les anciens bons n'avaient pas de part d'installation automatique : leurs montants restent inchangés.
+    return { ...rest, unitPriceTTC, vatRate: l.vatRate ?? vat, category: LEGACY_CATEGORY[l.category] ?? "autre", poseIncluse: l.poseIncluse ?? false, poseVatRate: l.poseVatRate ?? 20 };
   });
   const f: LegacyFinancing = raw.financing ?? {};
-  const { acompte, montantFinance, mensualite, taeg, ...fin } = f;
+  const { acompte, montantFinance, mensualite, taeg, enActivite, reportMois, ...fin } = f;
   void montantFinance;
   void mensualite;
   const financing: Order["financing"] = {
@@ -41,8 +53,13 @@ export function normalizeOrder(raw: LegacyOrder): Order {
     mode: fin.mode === "credit" || fin.mode === "mixte" ? "credit" : "comptant",
     echeancier: f.echeancier ?? { commande: acompte ?? 0, visiteTechnique: 0, livraison: 0, installation: 0 },
     taux: f.taux ?? taeg,
+    taeg: f.taeg ?? taeg,
+    acompteMode: f.acompteMode === "virement" ? "virement" : f.acompteMode ? "cheque" : undefined,
+    situation: f.situation === "retraite" ? "retraite" : enActivite === false ? "retraite" : "activite",
+    reportJours: f.reportJours ?? (reportMois ? 180 : undefined),
+    modaliteInteret: f.modaliteInteret ?? "normal",
   };
   const remiseTTC = raw.remiseTTC ?? (raw.remiseHT !== undefined ? Math.round(raw.remiseHT * (1 + vat / 100) * 100) / 100 : 0);
   const customer = { chantierIdentique: true, ...(raw.customer ?? {}) } as Order["customer"];
-  return { ...(raw as unknown as Order), customer, lines, financing, remiseTTC, vatRate: vat };
+  return { ...(raw as unknown as Order), customer, lines, financing, remiseTTC, vatRate: vat, poseRate: raw.poseRate ?? 0 };
 }

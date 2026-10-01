@@ -11,7 +11,7 @@ import { Button, Card, Spinner, cx } from "@/components/ui";
 import { openOrderPdf } from "@/lib/pdf";
 import { computeTotals } from "@/lib/pricing";
 import { eur, eur0 } from "@/lib/format";
-import { STEPS, emptyOrder, validateCustomer, type CustomerErrors } from "./model";
+import { STEPS, emptyOrder, validateCustomer, validatePayment, type CustomerErrors, type PaymentErrors } from "./model";
 import { StepClient } from "./step-client";
 import { StepProducts } from "./step-products";
 import { StepPricing } from "./step-pricing";
@@ -33,6 +33,7 @@ function OrderWizardInner({ initial, settings }: { initial?: Order; settings: Ap
   const [step, setStep] = React.useState(0);
   const [dir, setDir] = React.useState(1);
   const [errors, setErrors] = React.useState<CustomerErrors>({});
+  const [payErrors, setPayErrors] = React.useState<PaymentErrors>({});
   const [accepted, setAccepted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -74,11 +75,17 @@ function OrderWizardInner({ initial, settings }: { initial?: Order; settings: Ap
   const stepValid = (s: number) => {
     if (s === 0) return Object.keys(validateCustomer(order.customer)).length === 0;
     if (s === 1) return order.lines.length > 0;
+    if (s === 2) return Object.keys(validatePayment(order)).length === 0;
     return true;
   };
 
   const canLeaveStep = (s: number) => {
     if (s === 0) setErrors(validateCustomer(order.customer));
+    if (s === 2) {
+      const pe = validatePayment(order);
+      setPayErrors(pe);
+      if (Object.keys(pe).length > 0) setTimeout(() => document.getElementById("paiement")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
     return stepValid(s);
   };
 
@@ -100,7 +107,15 @@ function OrderWizardInner({ initial, settings }: { initial?: Order; settings: Ap
 
   const goTo = (s: number) => {
     if (s < 0 || s >= STEPS.length) return;
-    if (s < step || canLeaveStep(step)) move(s);
+    if (s <= step) return move(s);
+    // Avancer : chaque étape intermédiaire doit être valide.
+    for (let i = step; i < s; i++) {
+      if (!canLeaveStep(i)) {
+        if (i !== step) move(i);
+        return;
+      }
+    }
+    move(s);
   };
 
   const saveDraft = async () => {
@@ -138,15 +153,15 @@ function OrderWizardInner({ initial, settings }: { initial?: Order; settings: Ap
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">{initial ? "Reprise du bon" : "Nouveau bon de commande"}</p>
           <h1 className="font-display text-[26px] sm:text-[30px] font-semibold text-ink leading-tight mt-1">
-            {order.numero ? <span className="font-mono text-brand-blue-dark">{order.numero}</span> : "Brouillon"}
+            {order.numero ? <span className="font-mono text-brand-blue-dark">{order.numero}</span> : "En cours"}
           </h1>
           <p className="text-xs text-muted mt-1">
             {savedAt ? `Enregistré à ${new Date(savedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "Non enregistré"}
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={saveDraft} loading={saving} className="no-print mt-1">
-          <Save className="size-4" /> <span className="hidden sm:inline">Enregistrer le brouillon</span>
-          <span className="sm:hidden">Brouillon</span>
+          <Save className="size-4" /> <span className="hidden sm:inline">Enregistrer et quitter</span>
+          <span className="sm:hidden">Enregistrer</span>
         </Button>
       </div>
 
@@ -156,7 +171,7 @@ function OrderWizardInner({ initial, settings }: { initial?: Order; settings: Ap
           const state = i < step ? "done" : i === step ? "current" : "todo";
           return (
             <li key={s.key}>
-              <button type="button" onClick={() => goTo(i)} className="w-full text-left group" disabled={i > step && !stepValid(step)} aria-current={state === "current" ? "step" : undefined}>
+              <button type="button" onClick={() => goTo(i)} className="w-full text-left group" aria-current={state === "current" ? "step" : undefined}>
                 <div className="flex items-center gap-2">
                   <span
                     className={cx(
@@ -209,8 +224,18 @@ function OrderWizardInner({ initial, settings }: { initial?: Order; settings: Ap
                 }}
               />
             )}
-            {step === 1 && <StepProducts lines={order.lines} vatRate={order.vatRate} onChange={(lines) => update({ lines })} />}
-            {step === 2 && <StepPricing order={order} onChange={update} settings={settings} />}
+            {step === 1 && <StepProducts lines={order.lines} vatRate={order.vatRate} poseRate={order.poseRate} poseVatRate={settings.poseVatRate} onChange={(lines) => update({ lines })} />}
+            {step === 2 && (
+              <StepPricing
+                order={order}
+                settings={settings}
+                errors={payErrors}
+                onChange={(patch) => {
+                  update(patch);
+                  setPayErrors((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+                }}
+              />
+            )}
             {step === 3 && <StepReview order={order} onChange={update} accepted={accepted} onAccepted={setAccepted} />}
           </motion.div>
         </AnimatePresence>

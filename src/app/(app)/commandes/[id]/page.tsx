@@ -196,17 +196,17 @@ function OrderDetailInner() {
           )}
           {canDelete && (
             <Button variant="ghost" className="text-red-600" onClick={() => setConfirm("supprimer")}>
-              <Trash2 className="size-4" /> Supprimer le brouillon
+              <Trash2 className="size-4" /> Supprimer ce bon
             </Button>
           )}
         </div>
       )}
 
-      <Modal open={confirm !== null} onClose={() => setConfirm(null)} title={confirm === "annuler" ? "Annuler ce bon de commande ?" : "Supprimer ce brouillon ?"}>
+      <Modal open={confirm !== null} onClose={() => setConfirm(null)} title={confirm === "annuler" ? "Annuler ce bon de commande ?" : "Supprimer ce bon en cours ?"}>
         <p className="text-sm text-muted">
           {confirm === "annuler"
             ? "Le bon restera consultable avec le statut « Annulé » (rétractation, refus de financement…). Cette action est définitive."
-            : "Le brouillon sera supprimé définitivement."}
+            : "Le bon en cours sera supprimé définitivement."}
         </p>
         <div className="flex justify-end gap-2 mt-5">
           <Button variant="secondary" onClick={() => setConfirm(null)}>

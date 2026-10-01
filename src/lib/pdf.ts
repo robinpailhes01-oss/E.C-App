@@ -1,9 +1,9 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Order } from "./types";
-import { computeTotals, lineHT, lineTTC } from "./pricing";
+import { computeTotals, lineParts, poseRateOf } from "./pricing";
 import { COMPANY } from "./company";
-import { CATEGORIES, categoryLabel, formatLineAttributes } from "./catalog";
+import { CATEGORIES, MICRO_DESC, categoryLabel, formatLineAttributes, installationLabel } from "./catalog";
 
 const ORANGE: [number, number, number] = [200, 110, 40];
 const ORANGE_LIGHT: [number, number, number] = [251, 240, 228];
@@ -36,7 +36,8 @@ async function loadLogo(): Promise<string | null> {
   }
 }
 
-const paymentLabel: Record<string, string> = { cheque: "chèque", virement: "virement", cb: "carte bancaire", especes: "espèces" };
+const paymentLabel: Record<string, string> = { cheque: "chèque", virement: "virement" };
+const modaliteLabel: Record<string, string> = { normal: "normaux", compense: "compensés", gratuit: "gratuits" };
 
 const attrsLine = (l: Order["lines"][number]) => formatLineAttributes(l);
 
@@ -174,14 +175,23 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
     y += 2;
     const body: (string | { content: string; colSpan?: number; styles?: Record<string, unknown> })[][] = [];
     for (const l of lines) {
+      const parts = lineParts(l, poseRateOf(order));
       body.push([
         { content: `${l.quantity > 1 ? `${l.quantity} × ` : ""}${l.label}`, styles: { fontStyle: "bold" } },
-        eurPdf(lineHT(l)),
-        `${eurPdf(lineTTC(l) - lineHT(l))} (${pct(l.vatRate)})`,
-        { content: eurPdf(lineTTC(l)), styles: { fontStyle: "bold" } },
+        eurPdf(parts.materiel.ht),
+        `${eurPdf(parts.materiel.tva)} (${pct(parts.materiel.rate)})`,
+        { content: eurPdf(parts.materiel.ttc), styles: { fontStyle: "bold" } },
       ]);
-      const sub = [attrsLine(l), l.detail, l.description].filter(Boolean).join(" · ");
-      if (sub) body.push([{ content: sub, colSpan: 4, styles: { fontSize: 6.8, textColor: GRAY, cellPadding: { top: 0.6, bottom: 1.8, left: 3.5, right: 2 } } }]);
+      const sub = [attrsLine(l), l.detail, l.description, l.attributes?.onduleur === "Micro-onduleurs" ? MICRO_DESC : ""].filter(Boolean).join(" · ");
+      if (sub) body.push([{ content: sub, colSpan: 4, styles: { fontSize: 6.8, textColor: GRAY, cellPadding: { top: 0.4, bottom: 1.6, left: 3.5, right: 2 } } }]);
+      if (parts.pose) {
+        body.push([
+          { content: `${installationLabel(l.category)} (${parts.pose.pct} %)`, styles: { fontStyle: "bold" } },
+          eurPdf(parts.pose.ht),
+          `${eurPdf(parts.pose.tva)} (${pct(parts.pose.rate)})`,
+          { content: eurPdf(parts.pose.ttc), styles: { fontStyle: "bold" } },
+        ]);
+      }
     }
     autoTable(doc, {
       startY: y,
@@ -261,10 +271,17 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
     doc.text(v, leftX + 82, ly, { align: "right" });
     ly += strong ? 6.5 : 5.2;
   });
+  if (t.pose.ttc > 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7);
+    doc.setTextColor(...GRAY);
+    doc.text(`Dont installation : ${eurPdf(t.pose.ttc)} TTC (${eurPdf(t.pose.ht)} HT, TVA ${eurPdf(t.pose.tva)})`, leftX, ly - 0.5);
+    ly += 4;
+  }
 
   const e = f.echeancier;
   const sched: [string, string][] = [
-    ["ACOMPTE À LA COMMANDE", e.commande ? `${eurPdf(e.commande)}${f.acompteMode ? ` (${paymentLabel[f.acompteMode]})` : ""}` : "0,00 €"],
+    ["ACOMPTE À LA COMMANDE", eurPdf(e.commande || 0)],
     ["VERSEMENT À LA VISITE TECHNIQUE", eurPdf(e.visiteTechnique || 0)],
     ["VERSEMENT À LA LIVRAISON", eurPdf(e.livraison || 0)],
     ["VERSEMENT À L'INSTALLATION", eurPdf(e.installation || 0)],
@@ -279,10 +296,19 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
     doc.text(v, W - M - 2, ry, { align: "right" });
     ry += 5.2;
   });
+  if (f.acompteMode) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...INK);
+    doc.text("MODE DE RÈGLEMENT :", rightX, ry);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${paymentLabel[f.acompteMode].toUpperCase()}${f.acompteMode === "cheque" && (e.commande || 0) > 0 ? (f.chequeRecupere ? " (remis)" : "") : ""}`, W - M - 2, ry, { align: "right" });
+    ry += 5.2;
+  }
   ry += 1;
   checkbox(rightX, ry, Boolean(order.delaiInstallationMois), `DÉLAI D'INSTALLATION ${order.delaiInstallationMois ?? 3} MOIS${order.dateInstallationPrevue ? ` (prévue le ${dateInput(order.dateInstallationPrevue)})` : ""}`);
   ry += 5.2;
-  checkbox(rightX, ry, Boolean(f.reportJours), `REPORT ${f.reportJours || 180} JOURS`);
+  checkbox(rightX, ry, Boolean(f.reportJours), "REPORT 180 JOURS");
   ry += 5.2;
   if (f.mode === "comptant" && t.resteARepartir > 0) {
     doc.setFont("helvetica", "normal");
@@ -334,8 +360,9 @@ export async function buildOrderPdf(order: Order): Promise<jsPDF> {
       f.nbEmprunteurs ? `${f.nbEmprunteurs} emprunteur${f.nbEmprunteurs > 1 ? "s" : ""}` : null,
       f.dateNaissance1 ? `né(e) le ${dateInput(f.dateNaissance1)}` : null,
       f.dateNaissance2 ? `et le ${dateInput(f.dateNaissance2)}` : null,
-      f.enActivite === false ? "sans activité" : null,
-      f.avecAssurance ? "avec assurance emprunteur" : "sans assurance emprunteur",
+      f.situation === "retraite" ? "retraité" : "en activité",
+      `intérêts ${modaliteLabel[f.modaliteInteret ?? "normal"]}`,
+      f.avecAssurance ? "avec assurance DIM" : "sans assurance",
     ].filter(Boolean);
     doc.text(emp.join(" · ") + ". Vente conclue sous réserve d'acceptation du dossier de financement par l'organisme prêteur (art. L312-45 du Code de la consommation).", M + 2, y, { maxWidth: CW - 4 });
     y += 8;

@@ -40,6 +40,7 @@ export const MICRO_DESC = "Micro-onduleurs garantie 25 ans, taux d'efficacité M
 const BALLON_DESC = "3 modes de fonctionnement intelligent éco / hybride / électrique. Label énergétique A+. Garantie 3 ans cuve et 2 ans pièces.";
 const PAC_DESC =
   "Module hydraulique, groupe extérieur, contrôleur, télécommande modulante + récepteur, soupape de décharge différentielle, réchauffeur, disjoncteur, câble, couronne cuivre bitube isolée. Garantie fabricant 3 ans pièces + 5 ans compresseur.";
+const CARPORT_DESC = "Carport solaire en aluminium, panneaux BIPV Polaris structurellement étanches, poteaux réglables en hauteur, gouttière sans descente. Garantie 15 ans pièces.";
 const AIRAIR_DESC = "Garantie 3 ans pièces + 5 ans compresseur.";
 
 /** Marque et référence : obligatoires pour tout matériel (références en attente, voir references.ts). */
@@ -137,6 +138,8 @@ export const PRODUCTS: Product[] = [
   p({ id: "opt-mylight", category: "pv", group: "Options", label: "Batterie virtuelle MyLight", poseIncluse: false }),
   p({ id: "opt-passerelle", category: "pv", group: "Options", label: "Passerelle de communication", poseIncluse: false }),
   p({ id: "opt-depose", category: "pv", group: "Options", label: "Dépose / repose toiture", priceTTC: 4900, poseIncluse: false }),
+  p({ id: "pv-carport-1", category: "pv", group: "Carport solaire", label: "Carport solaire FHE PARK+ · 1 place", description: CARPORT_DESC, attributes: [marque("Marque", "carport"), ref("Référence", "carport")] }),
+  p({ id: "pv-carport-2", category: "pv", group: "Carport solaire", label: "Carport solaire FHE PARK+ · 2 places", description: CARPORT_DESC, attributes: [marque("Marque", "carport"), ref("Référence", "carport")] }),
   p({ id: "opt-borne-1", category: "pv", group: "Options", label: "Borne de recharge véhicule électrique · 1 place", attributes: [marque(), ref()] }),
   p({ id: "opt-borne-2", category: "pv", group: "Options", label: "Borne de recharge véhicule électrique · 2 places", attributes: [marque(), ref()] }),
 

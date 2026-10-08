@@ -5,7 +5,7 @@
  * par type de matériel. Une rubrique absente = saisie libre (marque et référence restent obligatoires).
  * Choisir une référence connue renseigne automatiquement la marque.
  *
- * En attente : micro-onduleurs, ballons, bornes de recharge, SSC.
+ * En attente : micro-onduleurs, capteur solaire, ballons, bornes de recharge, SSC.
  */
 export interface Reference {
   marque: string;
@@ -32,6 +32,11 @@ export const REFERENCES: Record<string, Reference[]> = {
   onduleurs: [
     { marque: "FHE", ref: "MASTER HYBRID monophasé", detail: "Onduleur hybride monophasé haute tension · fonction backup · IP65 · jusqu'à 7 modules batterie (33,24 kWh) · garantie 15 ans pièces" },
     { marque: "FHE", ref: "ONDULEUR P3-S triphasé", detail: "Onduleur hybride triphasé 6 à 12 kW · haute tension, compatible batteries · IP65 · suivi à distance · garantie 15 ans pièces" },
+  ],
+  /** Carports solaires. */
+  carport: [
+    { marque: "FHE", ref: "PARK+ 1 place", detail: "Carport solaire 1 place · structure aluminium · panneaux BIPV Polaris étanches · poteaux réglables en hauteur · garantie 15 ans pièces" },
+    { marque: "FHE", ref: "PARK+ 2 places", detail: "Carport solaire 2 places · structure aluminium · panneaux BIPV Polaris étanches · poteaux réglables en hauteur · garantie 15 ans pièces" },
   ],
   /** Pompes à chaleur air-eau, gamme Dynamic (monophasé 220-240 V, R-32, télécommande incluse). */
   pac: [

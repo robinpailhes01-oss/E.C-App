@@ -51,6 +51,13 @@ export const REFERENCES: Record<string, Reference[]> = {
     { marque: "FHE", ref: "PARK+ 1 place", detail: "Carport solaire 1 place · structure aluminium · panneaux BIPV Polaris étanches · poteaux réglables en hauteur · garantie 15 ans pièces" },
     { marque: "FHE", ref: "PARK+ 2 places", detail: "Carport solaire 2 places · structure aluminium · panneaux BIPV Polaris étanches · poteaux réglables en hauteur · garantie 15 ans pièces" },
   ],
+  /** Chauffage réversible air/air Hitachi airHome 200, monosplit mural (données constructeur provisoires). */
+  airair: [
+    { marque: "Hitachi", ref: "RAK-CJ20PHAE + RAC-CJ20WHAE", detail: "airHome 200 monosplit mural 2,0 kW · R32 · unité int. RAK-CJ20PHAE · unité ext. RAC-CJ20WHAE · froid 2,00 kW (SEER 6,80) · chaud 2,50 kW (SCOP 4,00)" },
+    { marque: "Hitachi", ref: "RAK-CJ25PHAE + RAC-CJ25WHAE", detail: "airHome 200 monosplit mural 2,5 kW · R32 · unité int. RAK-CJ25PHAE · unité ext. RAC-CJ25WHAE · froid 2,40 kW (SEER 6,80) · chaud 2,80 kW (SCOP 4,00)" },
+    { marque: "Hitachi", ref: "RAK-CJ35PHAE + RAC-CJ35WHAE", detail: "airHome 200 monosplit mural 3,5 kW · R32 · unité int. RAK-CJ35PHAE · unité ext. RAC-CJ35WHAE · froid 3,20 kW (SEER 6,60) · chaud 3,90 kW (SCOP 4,20)" },
+    { marque: "Hitachi", ref: "RAK-CJ50PHAE + RAC-CJ50WHAE", detail: "airHome 200 monosplit mural 5,0 kW · R32 · unité int. RAK-CJ50PHAE · unité ext. RAC-CJ50WHAE · froid 4,60 kW (SEER 6,10) · chaud 5,60 kW (SCOP 4,00)" },
+  ],
   /** Pompes à chaleur air-eau, gamme Dynamic (monophasé 220-240 V, R-32, télécommande incluse). */
   pac: [
     { marque: "FHE", ref: "Dynamic 8", detail: "PAC air-eau R-32 · 8,4 kW (A7/W35) · SCOP 5,22 · 220-240 V mono · fusible D32" },

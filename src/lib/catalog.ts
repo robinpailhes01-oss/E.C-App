@@ -181,7 +181,7 @@ export const PRODUCTS: Product[] = [
     group: "Chauffage réversible",
     label: "Kit de chauffage réversible air/air",
     description: AIRAIR_DESC,
-    attributes: [marque(), ref(), { key: "produits", label: "Produits (unités intérieures / extérieures)", type: "text" }],
+    attributes: [marque("Marque", "airair"), ref("Référence (unité int. + ext.)", "airair"), { key: "produits", label: "Autres unités / compléments", type: "text", placeholder: "facultatif (multisplit, unités supplémentaires…)" }],
   }),
 
   // ===================================================================== SSC

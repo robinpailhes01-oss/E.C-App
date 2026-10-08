@@ -59,8 +59,8 @@ const kitAttrs = (stockage: boolean): ProductAttribute[] => [
   ...(stockage ? [BATTERIE_REF] : []),
 ];
 const PAC_ATTRS: ProductAttribute[] = [
-  marque(),
-  ref(),
+  marque("Marque", "pac"),
+  ref("Référence", "pac"),
   { key: "type", label: "Type", type: "select", options: ["Bi-bloc", "Mono-bloc"] },
   { key: "mode", label: "Chaudière", type: "select", options: ["Relève de chaudière", "En suppression de la chaudière"] },
   { key: "phase", label: "Alimentation", type: "select", options: ["Monophasé", "Triphasé"] },

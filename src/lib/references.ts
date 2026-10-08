@@ -5,7 +5,7 @@
  * par type de matériel. Une rubrique absente = saisie libre (marque et référence restent obligatoires).
  * Choisir une référence connue renseigne automatiquement la marque.
  *
- * En attente : micro-onduleurs, capteur solaire, ballons, bornes de recharge, SSC.
+ * En attente : micro-onduleurs, ballons, bornes de recharge, SSC.
  */
 export interface Reference {
   marque: string;
@@ -32,6 +32,10 @@ export const REFERENCES: Record<string, Reference[]> = {
   onduleurs: [
     { marque: "FHE", ref: "MASTER HYBRID monophasé", detail: "Onduleur hybride monophasé haute tension · fonction backup · IP65 · jusqu'à 7 modules batterie (33,24 kWh) · garantie 15 ans pièces" },
     { marque: "FHE", ref: "ONDULEUR P3-S triphasé", detail: "Onduleur hybride triphasé 6 à 12 kW · haute tension, compatible batteries · IP65 · suivi à distance · garantie 15 ans pièces" },
+  ],
+  /** Capteurs solaires thermiques (CESI, système solaire combiné). */
+  capteur: [
+    { marque: "FHE", ref: "FHE-7S3242", detail: "Capteur solaire thermique · revêtement PVD (95 % d'absorption) · verre classe U1 · isolation laine minérale · industriel français · garantie 10 ans" },
   ],
   /** Carports solaires. */
   carport: [

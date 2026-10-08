@@ -162,7 +162,7 @@ export const PRODUCTS: Product[] = [
     priceTTC: 2000,
     attributes: [marque(), ref(), { key: "capacite", label: "Capacité", type: "number", unit: "L", placeholder: "ex. 200" }],
   }),
-  p({ id: "cesi", category: "ballon", group: "Solaire", label: "CESI · Chauffe-eau solaire individuel", priceTTC: 8900, attributes: [marque(), ref()] }),
+  p({ id: "cesi", category: "ballon", group: "Solaire", label: "CESI · Chauffe-eau solaire individuel", priceTTC: 8900, attributes: [marque("Marque", "capteur"), ref("Référence", "capteur")] }),
 
   // ================================================================ PAC air-eau
   ...([
@@ -185,8 +185,8 @@ export const PRODUCTS: Product[] = [
   }),
 
   // ===================================================================== SSC
-  p({ id: "ssc-seul", category: "ssc", group: "Système solaire combiné", label: "SSC seul · Système solaire combiné", priceTTC: 16900, attributes: [marque(), ref()] }),
-  p({ id: "ssc-pac", category: "ssc", group: "Système solaire combiné", label: "SSC + Pompe à chaleur", priceTTC: 24900, attributes: [marque(), ref()] }),
+  p({ id: "ssc-seul", category: "ssc", group: "Système solaire combiné", label: "SSC seul · Système solaire combiné", priceTTC: 16900, attributes: [marque("Marque", "capteur"), ref("Référence", "capteur")] }),
+  p({ id: "ssc-pac", category: "ssc", group: "Système solaire combiné", label: "SSC + Pompe à chaleur", priceTTC: 24900, attributes: [marque("Marque", "capteur"), ref("Référence", "capteur")] }),
 ];
 
 export const productById = (id: string) => PRODUCTS.find((x) => x.id === id);

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Minus, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { CATEGORIES, VAT_RATES, categoryColor, categoryShort, formatLineAttributes, groupsOf, productsByCategory } from "@/lib/catalog";
-import { referencesFor } from "@/lib/references";
+import { findReference, marquesOf, referenceLabel, referencesOf } from "@/lib/references";
 import type { OrderLine, Product, ProductAttribute, ProductCategory } from "@/lib/types";
 import { eur, eur0, uid } from "@/lib/format";
 import { lineParts, ttcToHT } from "@/lib/pricing";
@@ -194,7 +194,6 @@ function AddLineSheet({
   const free = !preset;
   const attributes: ProductAttribute[] = free ? (kind === "materiel" ? MARQUE_REF : []) : preset.attributes ?? [];
   const poseIncluse = free ? kind === "materiel" : preset.poseIncluse !== false;
-  const refs = referencesFor(preset?.id, cat);
 
   const label = free ? freeLabel.trim() : preset.custom && preset.labelFrom ? preset.labelFrom(attrs) : preset.label;
   const missing = attributes.filter((a) => a.required && !(attrs[a.key] ?? "").trim());
@@ -265,16 +264,29 @@ function AddLineSheet({
                   <>
                     <Input
                       value={attrs[a.key] ?? ""}
-                      onChange={(e) => setAttr(a.key, e.target.value)}
+                      onChange={(e) => {
+                        setAttr(a.key, e.target.value);
+                        // Une référence connue renseigne la marque (champs marque / référence séparés).
+                        const known = a.key === "ref" ? findReference(a.suggest, e.target.value) : undefined;
+                        if (known) setAttr("marque", known.marque);
+                      }}
                       placeholder={a.placeholder}
-                      list={a.key === "marque" && refs.marques?.length ? "dl-marques" : a.key === "ref" && refs.refs?.length ? "dl-refs" : undefined}
+                      list={a.suggest && referencesOf(a.suggest).length ? `dl-${a.suggest}-${a.key === "marque" ? "marque" : a.key === "ref" ? "ref" : "combo"}` : undefined}
                     />
+                    {a.suggest && a.key !== "marque" && findReference(a.suggest, attrs[a.key] ?? "")?.detail && (
+                      <p className="mt-1 text-[11px] leading-snug text-muted">{findReference(a.suggest, attrs[a.key] ?? "")?.detail}</p>
+                    )}
                   </>
                 )}
               </Field>
             ))}
-            <datalist id="dl-marques">{refs.marques?.map((m) => <option key={m} value={m} />)}</datalist>
-            <datalist id="dl-refs">{refs.refs?.map((m) => <option key={m} value={m} />)}</datalist>
+            {[...new Set(attributes.map((a) => a.suggest).filter((g): g is string => !!g))].map((g) => (
+              <React.Fragment key={g}>
+                <datalist id={`dl-${g}-marque`}>{marquesOf(g).map((m) => <option key={m} value={m} />)}</datalist>
+                <datalist id={`dl-${g}-combo`}>{referencesOf(g).map((r) => <option key={r.ref} value={referenceLabel(r)} />)}</datalist>
+                <datalist id={`dl-${g}-ref`}>{referencesOf(g).map((r) => <option key={r.ref} value={r.ref} label={`${r.marque} · ${r.ref}`} />)}</datalist>
+              </React.Fragment>
+            ))}
           </div>
         )}
 

@@ -23,6 +23,8 @@ export interface ProductAttribute {
   default?: string;
   /** Non répété dans le résumé de la ligne (déjà présent dans le libellé). */
   hideInSummary?: boolean;
+  /** Liste de références proposées à la saisie (clé de `REFERENCES`), la saisie libre reste possible. */
+  suggest?: string;
 }
 
 export interface Product {

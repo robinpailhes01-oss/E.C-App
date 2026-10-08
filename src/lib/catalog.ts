@@ -43,18 +43,20 @@ const PAC_DESC =
 const AIRAIR_DESC = "Garantie 3 ans pièces + 5 ans compresseur.";
 
 /** Marque et référence : obligatoires pour tout matériel (références en attente, voir references.ts). */
-const marque = (label = "Marque"): ProductAttribute => ({ key: "marque", label, type: "text", required: true, placeholder: "ex. fabricant" });
-const ref = (label = "Référence"): ProductAttribute => ({ key: "ref", label, type: "text", required: true, placeholder: "référence constructeur" });
+const marque = (label = "Marque", suggest?: string): ProductAttribute => ({ key: "marque", label, type: "text", required: true, placeholder: "ex. fabricant", suggest });
+const ref = (label = "Référence", suggest?: string): ProductAttribute => ({ key: "ref", label, type: "text", required: true, placeholder: "référence constructeur", suggest });
 
+const ONDULEUR_REF: ProductAttribute = { key: "onduleurRef", label: "Onduleur · marque / référence", type: "text", placeholder: "facultatif", suggest: "onduleurs" };
+const BATTERIE_REF: ProductAttribute = { key: "batterieRef", label: "Batterie · marque / référence", type: "text", placeholder: "facultatif", suggest: "batteries" };
 const ONDULEUR: ProductAttribute[] = [
   { key: "onduleur", label: "Onduleur", type: "select", options: ["Micro-onduleurs", "Onduleur hybride"], default: "Micro-onduleurs" },
-  { key: "onduleurRef", label: "Onduleur · marque / référence", type: "text", placeholder: "facultatif" },
+  ONDULEUR_REF,
 ];
 const kitAttrs = (stockage: boolean): ProductAttribute[] => [
-  marque("Marque des panneaux"),
-  ref("Référence des panneaux"),
+  marque("Marque des panneaux", "panneaux"),
+  ref("Référence des panneaux", "panneaux"),
   ...ONDULEUR.map((a) => (a.key === "onduleur" && stockage ? { ...a, default: "Onduleur hybride" } : a)),
-  ...(stockage ? [{ key: "batterieRef", label: "Batterie · marque / référence", type: "text" as const, placeholder: "facultatif" }] : []),
+  ...(stockage ? [BATTERIE_REF] : []),
 ];
 const PAC_ATTRS: ProductAttribute[] = [
   marque(),
@@ -128,9 +130,9 @@ export const PRODUCTS: Product[] = [
     group: "Stockage seul",
     label: "Système de stockage 5 kW (batterie + onduleur)",
     priceTTC: 8900,
-    attributes: [marque("Batterie · marque"), ref("Batterie · référence"), { key: "onduleurRef", label: "Onduleur · marque / référence", type: "text", placeholder: "facultatif" }],
+    attributes: [marque("Batterie · marque", "batteries"), ref("Batterie · référence", "batteries"), ONDULEUR_REF],
   }),
-  p({ id: "sto-plus", category: "pv", group: "Stockage seul", label: "Stockage supplémentaire (par 5 kW)", priceTTC: 5900, attributes: [marque("Batterie · marque"), ref("Batterie · référence")] }),
+  p({ id: "sto-plus", category: "pv", group: "Stockage seul", label: "Stockage supplémentaire (par 5 kW)", priceTTC: 5900, attributes: [marque("Batterie · marque", "batteries"), ref("Batterie · référence", "batteries")] }),
 
   p({ id: "opt-mylight", category: "pv", group: "Options", label: "Batterie virtuelle MyLight", poseIncluse: false }),
   p({ id: "opt-passerelle", category: "pv", group: "Options", label: "Passerelle de communication", poseIncluse: false }),

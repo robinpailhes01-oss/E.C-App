@@ -5,7 +5,7 @@
  * par type de matériel. Une rubrique absente = saisie libre (marque et référence restent obligatoires).
  * Choisir une référence connue renseigne automatiquement la marque.
  *
- * En attente : micro-onduleurs, ballons, bornes de recharge, SSC.
+ * En attente : micro-onduleurs, bornes de recharge, SSC.
  */
 export interface Reference {
   marque: string;
@@ -32,6 +32,15 @@ export const REFERENCES: Record<string, Reference[]> = {
   onduleurs: [
     { marque: "FHE", ref: "MASTER HYBRID monophasé", detail: "Onduleur hybride monophasé haute tension · fonction backup · IP65 · jusqu'à 7 modules batterie (33,24 kWh) · garantie 15 ans pièces" },
     { marque: "FHE", ref: "ONDULEUR P3-S triphasé", detail: "Onduleur hybride triphasé 6 à 12 kW · haute tension, compatible batteries · IP65 · suivi à distance · garantie 15 ans pièces" },
+  ],
+  /** Ballons thermodynamiques. */
+  ballons: [
+    { marque: "FHE", ref: "BALLON TH R134A 200 L", detail: "Ballon thermodynamique 200 L · réfrigérant R134A · raccords hydrauliques Ø3/4\" · pression sonore 41 à 59 dB(A) · garantie matériel 5 ans" },
+    { marque: "FHE", ref: "BALLON TH R134A 300 L", detail: "Ballon thermodynamique 300 L · réfrigérant R134A · raccords hydrauliques Ø3/4\" · pression sonore 41 à 59 dB(A) · garantie matériel 5 ans" },
+  ],
+  /** Ballons du système solaire combiné. */
+  ballonSolaire: [
+    { marque: "FHE", ref: "TKS 420/140", detail: "Ballon double paroi · chauffage solaire + production d'ECS · installation au sol, position verticale" },
   ],
   /** Capteurs solaires thermiques (CESI, système solaire combiné). */
   capteur: [
